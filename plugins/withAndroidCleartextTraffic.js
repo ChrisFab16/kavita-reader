@@ -3,19 +3,14 @@ const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins'
 const path = require('path');
 const fs = require('fs');
 
-// Step 1: Add usesCleartextTraffic and networkSecurityConfig to AndroidManifest
 const withCleartextManifest = (config) => {
   return withAndroidManifest(config, (config) => {
     const manifest = config.modResults;
     const app = manifest.manifest.application[0];
 
-    // Add cleartext traffic permission
     app.$['android:usesCleartextTraffic'] = 'true';
-
-    // Add network security config reference
     app.$['android:networkSecurityConfig'] = '@xml/network_security_config';
 
-    // Add http to queries block if not already present
     if (!manifest.manifest.queries) {
       manifest.manifest.queries = [];
     }
@@ -28,7 +23,6 @@ const withCleartextManifest = (config) => {
       queries[0].intent = [];
     }
 
-    // Check if http intent already exists
     const hasHttp = queries[0].intent.some(
       (i) => i?.data?.[0]?.['$']?.['android:scheme'] === 'http'
     );
@@ -45,7 +39,6 @@ const withCleartextManifest = (config) => {
   });
 };
 
-// Step 2: Write the network_security_config.xml file into res/xml/
 const withNetworkSecurityConfig = (config) => {
   return withDangerousMod(config, [
     'android',
@@ -59,12 +52,13 @@ const withNetworkSecurityConfig = (config) => {
         'xml'
       );
 
-      // Create xml directory if it doesn't exist
       if (!fs.existsSync(xmlDir)) {
         fs.mkdirSync(xmlDir, { recursive: true });
       }
 
       const xmlPath = path.join(xmlDir, 'network_security_config.xml');
+
+      // Allow cleartext HTTP, trust system + user certs (user certs needed for self-signed HTTPS)
       const xmlContent = `<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
   <base-config cleartextTrafficPermitted="true">
@@ -83,7 +77,6 @@ const withNetworkSecurityConfig = (config) => {
   ]);
 };
 
-// Combine both modifications into one plugin
 const withAndroidCleartextTraffic = (config) => {
   config = withCleartextManifest(config);
   config = withNetworkSecurityConfig(config);

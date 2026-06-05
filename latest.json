@@ -1,0 +1,51 @@
+[
+  {
+    "id": "4d59c836-a6e6-4f90-8ad7-baae467283eb",
+    "status": "ERRORED",
+    "platform": "ANDROID",
+    "error": {
+      "errorCode": "EAS_BUILD_UNKNOWN_GRADLE_ERROR",
+      "message": "Gradle build failed with unknown error. See logs for the \"Run gradlew\" phase for more information."
+    },
+    "artifacts": {},
+    "fingerprint": {
+      "id": "019e95c8-c219-7d5a-a171-7a144e71616f",
+      "hash": "771e889e4811f69bc4a824d2498a6b3a947633ce"
+    },
+    "initiatingActor": {
+      "id": "4205ab75-5fd6-42dd-a493-eff58e1e49ea",
+      "displayName": "webtechnick"
+    },
+    "logFiles": [
+      "https://storage.googleapis.com/eas-workflows-production/logs/45df5044-5be7-4201-8f7b-760737b9f86d/4d59c836-a6e6-4f90-8ad7-baae467283eb/2026-06-05T03%3A17%3A04Z-057d4c4c-c7da-4883-ba76-1c352e6ae478.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260605%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260605T032048Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=5650b741832318e69f1ac34e38777f1f72a23029560c5e6dc7fd82ef68995259f16edb1c68c97d1b9f5089e561a52d4e6c3c45675c988673454dd48c3370fe2975d1704b710631c557b2edf841495a84b7e349c0c2ac080f4e6bdb19f8def0a8cf74f322e1d950ecd783ea3f2fa34dea340d9f829284e1d1c8afe222ea5270656c5f3b68dd275c74a1404d6ab60b9e840100689855f30215765a8053edede93ee884a2da343781c9a7aaefd0c199d46ef5ab3284b637b13b2c85c604058bd79bb18c4ff124a59226a7100c2448e802f099f987b866ecebadc04605e89eb76fc0875bce4cf2de6fa6cffdf594d66084a356960e2c976a7210260c89c0550a671c"
+    ],
+    "project": {
+      "id": "45df5044-5be7-4201-8f7b-760737b9f86d",
+      "name": "kavita-reader",
+      "slug": "kavita-reader",
+      "ownerAccount": {
+        "id": "1abf4d22-f588-4f4e-a72a-a3adb933bdce",
+        "name": "webtechnick"
+      }
+    },
+    "distribution": "INTERNAL",
+    "buildProfile": "preview",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.1",
+    "appBuildVersion": "9",
+    "runtimeVersion": "1.0.0",
+    "gitCommitHash": "1ce7e9ce843489084f091f2c631730f0b404aa30",
+    "gitCommitMessage": "fix: disable new architecture for compatibility with react-native-pdf and blob-util",
+    "priority": "NORMAL",
+    "createdAt": "2026-06-05T03:17:02.591Z",
+    "updatedAt": "2026-06-05T03:19:42.431Z",
+    "completedAt": "2026-06-05T03:19:42.270Z",
+    "expirationDate": "2026-06-19T03:17:02.610Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 1568,
+      "buildQueueTime": 4488,
+      "buildDuration": 153623
+    }
+  }
+]

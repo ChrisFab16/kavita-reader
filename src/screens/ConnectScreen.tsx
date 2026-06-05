@@ -16,9 +16,16 @@ export default function ConnectScreen({ navigation }: Props) {
   const [connectionType, setConnectionType] = useState('ip');
   const [serverAddress, setServerAddress] = useState('');
   const [port, setPort] = useState('5000');
-  const [portEnabled, setPortEnabled] = useState(true); // false = reverse proxy mode, no port
-  const [opdsUrl, setOpdsUrl] = useState('');
+  const [portEnabled, setPortEnabled] = useState(true);
   const [useHttps, setUseHttps] = useState(false);
+
+  // OPDS simplified inputs
+  const [opdsAddress, setOpdsAddress] = useState('');
+  const [opdsPort, setOpdsPort] = useState('5000');
+  const [opdsPortEnabled, setOpdsPortEnabled] = useState(true);
+  const [opdsApiKey, setOpdsApiKey] = useState('');
+  const [opdsUseHttps, setOpdsUseHttps] = useState(false);
+
   const [loading, setLoading] = useState(false);
 
   const addServer = useServerStore((state) => state.addServer);
@@ -27,26 +34,38 @@ export default function ConnectScreen({ navigation }: Props) {
   const theme = useAppTheme();
 
   const buildServerUrl = (): string => {
-    if (connectionType === 'opds') {
-      return opdsUrl.trim();
-    }
-
     let cleanAddress = serverAddress.trim();
-    // Strip any protocol prefix the user may have typed
     cleanAddress = cleanAddress.replace(/^https?:\/\//, '');
-    // Strip trailing slashes
     cleanAddress = cleanAddress.replace(/\/$/, '');
-    // Strip any port the user may have typed in the address field
     cleanAddress = cleanAddress.replace(/:\d+$/, '');
-
     const protocol = useHttps ? 'https' : 'http';
-
-    // Only append port if port mode is enabled and port is non-empty
     if (portEnabled && port.trim()) {
       return `${protocol}://${cleanAddress}:${port.trim()}`;
     }
+    return `${protocol}://${cleanAddress}`;
+  };
 
-    // Reverse proxy mode — no port
+  const buildOpdsUrl = (): string => {
+    let cleanAddress = opdsAddress.trim();
+    cleanAddress = cleanAddress.replace(/^https?:\/\//, '');
+    cleanAddress = cleanAddress.replace(/\/$/, '');
+    cleanAddress = cleanAddress.replace(/:\d+$/, '');
+    const protocol = opdsUseHttps ? 'https' : 'http';
+    const base = opdsPortEnabled && opdsPort.trim()
+      ? `${protocol}://${cleanAddress}:${opdsPort.trim()}`
+      : `${protocol}://${cleanAddress}`;
+    return `${base}/api/opds/${opdsApiKey.trim()}`;
+  };
+
+  const extractBaseFromOpds = (): string => {
+    let cleanAddress = opdsAddress.trim();
+    cleanAddress = cleanAddress.replace(/^https?:\/\//, '');
+    cleanAddress = cleanAddress.replace(/\/$/, '');
+    cleanAddress = cleanAddress.replace(/:\d+$/, '');
+    const protocol = opdsUseHttps ? 'https' : 'http';
+    if (opdsPortEnabled && opdsPort.trim()) {
+      return `${protocol}://${cleanAddress}:${opdsPort.trim()}`;
+    }
     return `${protocol}://${cleanAddress}`;
   };
 
@@ -56,14 +75,17 @@ export default function ConnectScreen({ navigation }: Props) {
         Alert.alert('Error', 'Please enter a server address');
         return;
       }
-      // Only validate port if port mode is enabled
       if (portEnabled && (!port.trim() || isNaN(Number(port)))) {
         Alert.alert('Error', 'Please enter a valid port number, or disable the port for reverse proxy setups');
         return;
       }
     } else {
-      if (!opdsUrl.trim()) {
-        Alert.alert('Error', 'Please enter an OPDS URL');
+      if (!opdsAddress.trim()) {
+        Alert.alert('Error', 'Please enter a server address');
+        return;
+      }
+      if (!opdsApiKey.trim()) {
+        Alert.alert('Error', 'Please enter your OPDS API key');
         return;
       }
     }
@@ -71,7 +93,7 @@ export default function ConnectScreen({ navigation }: Props) {
     setLoading(true);
 
     try {
-      const serverUrl = buildServerUrl();
+      const serverUrl = connectionType === 'ip' ? buildServerUrl() : extractBaseFromOpds();
       const client = new KavitaClient(serverUrl);
       const isConnected = await client.testConnection();
 
@@ -160,7 +182,7 @@ export default function ConnectScreen({ navigation }: Props) {
               onValueChange={setConnectionType}
               buttons={[
                 { value: 'ip', label: 'IP / Hostname', icon: 'ip-network' },
-                { value: 'opds', label: 'OPDS URL', icon: 'link' },
+                { value: 'opds', label: 'OPDS', icon: 'rss' },
               ]}
               style={styles.segmentedButtons}
               theme={{ colors: { secondaryContainer: theme.primaryLight } }}
@@ -171,7 +193,6 @@ export default function ConnectScreen({ navigation }: Props) {
                 <Text variant="labelLarge" style={[styles.label, { color: theme.text }]}>
                   Server Address
                 </Text>
-
                 <TextInput
                   value={serverAddress}
                   onChangeText={setServerAddress}
@@ -187,96 +208,43 @@ export default function ConnectScreen({ navigation }: Props) {
                   placeholderTextColor={theme.textTertiary}
                 />
 
-                {/* Port row with enable/disable toggle for reverse proxy support */}
                 <View style={styles.portHeaderRow}>
-                  <Text variant="labelLarge" style={[styles.label, { color: theme.text }]}>
-                    Port
-                  </Text>
-                  <Button
-                    mode="text"
-                    compact
-                    onPress={() => setPortEnabled(!portEnabled)}
-                    textColor={portEnabled ? theme.textSecondary : theme.accent}
-                  >
+                  <Text variant="labelLarge" style={[styles.label, { color: theme.text }]}>Port</Text>
+                  <Button mode="text" compact onPress={() => setPortEnabled(!portEnabled)}
+                    textColor={portEnabled ? theme.textSecondary : theme.accent}>
                     {portEnabled ? 'Disable (reverse proxy)' : 'Enable port'}
                   </Button>
                 </View>
 
                 {portEnabled ? (
                   <View style={styles.portSpinnerContainer}>
-                    <Button
-                      mode="outlined"
-                      onPress={() => {
-                        const currentPort = parseInt(port) || 5000;
-                        if (currentPort > 1) setPort(String(currentPort - 1));
-                      }}
-                      disabled={loading}
-                      style={[styles.portButton, { borderColor: theme.primary }]}
-                      textColor={theme.primary}
-                      compact
-                    >
-                      -
-                    </Button>
-                    <TextInput
-                      value={port}
-                      onChangeText={(text) => {
-                        const num = text.replace(/[^0-9]/g, '');
-                        if (num === '' || (parseInt(num) >= 1 && parseInt(num) <= 65535)) {
-                          setPort(num);
-                        }
-                      }}
-                      mode="outlined"
-                      keyboardType="numeric"
-                      style={[styles.portInputCenter, { backgroundColor: theme.surface }]}
-                      disabled={loading}
-                      textColor={theme.text}
-                    />
-                    <Button
-                      mode="outlined"
-                      onPress={() => {
-                        const currentPort = parseInt(port) || 5000;
-                        if (currentPort < 65535) setPort(String(currentPort + 1));
-                      }}
-                      disabled={loading}
-                      style={[styles.portButton, { borderColor: theme.primary }]}
-                      textColor={theme.primary}
-                      compact
-                    >
-                      +
-                    </Button>
+                    <Button mode="outlined" onPress={() => { const p = parseInt(port)||5000; if(p>1) setPort(String(p-1)); }}
+                      disabled={loading} style={[styles.portButton, { borderColor: theme.primary }]} textColor={theme.primary} compact>-</Button>
+                    <TextInput value={port} onChangeText={(t) => { const n=t.replace(/[^0-9]/g,''); if(n===''||(parseInt(n)>=1&&parseInt(n)<=65535)) setPort(n); }}
+                      mode="outlined" keyboardType="numeric" style={[styles.portInputCenter, { backgroundColor: theme.surface }]}
+                      disabled={loading} textColor={theme.text} />
+                    <Button mode="outlined" onPress={() => { const p = parseInt(port)||5000; if(p<65535) setPort(String(p+1)); }}
+                      disabled={loading} style={[styles.portButton, { borderColor: theme.primary }]} textColor={theme.primary} compact>+</Button>
                   </View>
                 ) : (
                   <Text variant="bodySmall" style={[styles.hint, { color: theme.accent }]}>
-                    ✓ Port disabled — connecting directly to hostname (reverse proxy mode)
+                    ✓ Port disabled — reverse proxy mode
                   </Text>
                 )}
 
                 <View style={[styles.httpsContainer, { marginTop: portEnabled ? 12 : 4 }]}>
-                  <Text variant="labelLarge" style={[styles.label, { color: theme.text }]}>
-                    Protocol
-                  </Text>
-                  <SegmentedButtons
-                    value={useHttps ? 'https' : 'http'}
-                    onValueChange={(value) => setUseHttps(value === 'https')}
-                    buttons={[
-                      { value: 'http', label: 'HTTP' },
-                      { value: 'https', label: 'HTTPS' },
-                    ]}
-                    style={styles.protocolButtons}
-                    density="small"
-                  />
+                  <Text variant="labelLarge" style={[styles.label, { color: theme.text }]}>Protocol</Text>
+                  <SegmentedButtons value={useHttps ? 'https' : 'http'} onValueChange={(v) => setUseHttps(v === 'https')}
+                    buttons={[{ value: 'http', label: 'HTTP' }, { value: 'https', label: 'HTTPS' }]}
+                    style={styles.protocolButtons} density="small" />
                 </View>
 
                 <Text variant="bodySmall" style={[styles.hint, { color: theme.textTertiary }]}>
-                  {portEnabled
-                    ? 'Default Kavita port is 5000. Use HTTP for local networks.'
-                    : 'Reverse proxy setups typically use HTTPS on port 443. Enable HTTPS above if needed.'}
+                  {portEnabled ? 'Default Kavita port is 5000. Use HTTP for local networks.' : 'Reverse proxy setups typically use HTTPS.'}
                 </Text>
 
                 <View style={[styles.previewContainer, { backgroundColor: theme.card }]}>
-                  <Text variant="bodySmall" style={[styles.previewLabel, { color: theme.primary }]}>
-                    Will connect to:
-                  </Text>
+                  <Text variant="bodySmall" style={[styles.previewLabel, { color: theme.primary }]}>Will connect to:</Text>
                   <Text variant="bodyMedium" style={[styles.previewUrl, { color: theme.text }]}>
                     {serverAddress ? buildServerUrl() : 'Enter server address above'}
                   </Text>
@@ -287,38 +255,86 @@ export default function ConnectScreen({ navigation }: Props) {
             {connectionType === 'opds' && (
               <View style={styles.inputContainer}>
                 <Text variant="labelLarge" style={[styles.label, { color: theme.text }]}>
-                  OPDS Feed URL
+                  Server Address
                 </Text>
-
                 <TextInput
-                  value={opdsUrl}
-                  onChangeText={setOpdsUrl}
-                  placeholder="https://example.com/api/opds/..."
+                  value={opdsAddress}
+                  onChangeText={setOpdsAddress}
+                  placeholder="192.168.1.100  or  myserver.com"
                   mode="outlined"
                   style={[styles.input, { backgroundColor: theme.surface }]}
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="url"
-                  left={<TextInput.Icon icon="rss" />}
+                  left={<TextInput.Icon icon="server" />}
+                  disabled={loading}
+                  textColor={theme.text}
+                  placeholderTextColor={theme.textTertiary}
+                />
+
+                <View style={styles.portHeaderRow}>
+                  <Text variant="labelLarge" style={[styles.label, { color: theme.text }]}>Port</Text>
+                  <Button mode="text" compact onPress={() => setOpdsPortEnabled(!opdsPortEnabled)}
+                    textColor={opdsPortEnabled ? theme.textSecondary : theme.accent}>
+                    {opdsPortEnabled ? 'Disable (reverse proxy)' : 'Enable port'}
+                  </Button>
+                </View>
+
+                {opdsPortEnabled ? (
+                  <View style={styles.portSpinnerContainer}>
+                    <Button mode="outlined" onPress={() => { const p=parseInt(opdsPort)||5000; if(p>1) setOpdsPort(String(p-1)); }}
+                      disabled={loading} style={[styles.portButton, { borderColor: theme.primary }]} textColor={theme.primary} compact>-</Button>
+                    <TextInput value={opdsPort} onChangeText={(t) => { const n=t.replace(/[^0-9]/g,''); if(n===''||(parseInt(n)>=1&&parseInt(n)<=65535)) setOpdsPort(n); }}
+                      mode="outlined" keyboardType="numeric" style={[styles.portInputCenter, { backgroundColor: theme.surface }]}
+                      disabled={loading} textColor={theme.text} />
+                    <Button mode="outlined" onPress={() => { const p=parseInt(opdsPort)||5000; if(p<65535) setOpdsPort(String(p+1)); }}
+                      disabled={loading} style={[styles.portButton, { borderColor: theme.primary }]} textColor={theme.primary} compact>+</Button>
+                  </View>
+                ) : (
+                  <Text variant="bodySmall" style={[styles.hint, { color: theme.accent }]}>
+                    ✓ Port disabled — reverse proxy mode
+                  </Text>
+                )}
+
+                <View style={[styles.httpsContainer, { marginTop: opdsPortEnabled ? 12 : 4 }]}>
+                  <Text variant="labelLarge" style={[styles.label, { color: theme.text }]}>Protocol</Text>
+                  <SegmentedButtons value={opdsUseHttps ? 'https' : 'http'} onValueChange={(v) => setOpdsUseHttps(v === 'https')}
+                    buttons={[{ value: 'http', label: 'HTTP' }, { value: 'https', label: 'HTTPS' }]}
+                    style={styles.protocolButtons} density="small" />
+                </View>
+
+                <Text variant="labelLarge" style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+                  OPDS API Key
+                </Text>
+                <TextInput
+                  value={opdsApiKey}
+                  onChangeText={setOpdsApiKey}
+                  placeholder="017a75c1-3c6f-4f49-bdb1-d45d0d4aaf23"
+                  mode="outlined"
+                  style={[styles.input, { backgroundColor: theme.surface }]}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  left={<TextInput.Icon icon="key" />}
                   disabled={loading}
                   textColor={theme.text}
                   placeholderTextColor={theme.textTertiary}
                 />
 
                 <Text variant="bodySmall" style={[styles.hint, { color: theme.textTertiary }]}>
-                  Paste the full OPDS feed URL from your Kavita server settings.
+                  Find your OPDS API key in Kavita → User Settings → OPDS
                 </Text>
+
+                {opdsAddress && opdsApiKey ? (
+                  <View style={[styles.previewContainer, { backgroundColor: theme.card }]}>
+                    <Text variant="bodySmall" style={[styles.previewLabel, { color: theme.primary }]}>OPDS URL:</Text>
+                    <Text variant="bodyMedium" style={[styles.previewUrl, { color: theme.text }]}>{buildOpdsUrl()}</Text>
+                  </View>
+                ) : null}
               </View>
             )}
 
-            <Button
-              mode="contained"
-              onPress={handleConnect}
-              disabled={loading}
-              style={styles.connectButton}
-              buttonColor={theme.accent}
-              contentStyle={styles.buttonContent}
-            >
+            <Button mode="contained" onPress={handleConnect} disabled={loading}
+              style={styles.connectButton} buttonColor={theme.accent} contentStyle={styles.buttonContent}>
               {loading ? 'Connecting...' : 'Connect Server'}
             </Button>
 
@@ -326,19 +342,13 @@ export default function ConnectScreen({ navigation }: Props) {
 
             <View style={styles.dividerContainer}>
               <Divider style={[styles.divider, { backgroundColor: theme.border }]} />
-              <Text variant="labelMedium" style={[styles.dividerText, { color: theme.textSecondary }]}>
-                DEMO MODE
-              </Text>
+              <Text variant="labelMedium" style={[styles.dividerText, { color: theme.textSecondary }]}>DEMO MODE</Text>
               <Divider style={[styles.divider, { backgroundColor: theme.border }]} />
             </View>
 
-            <Button
-              mode="outlined"
-              onPress={handleDemoMode}
+            <Button mode="outlined" onPress={handleDemoMode}
               style={[styles.demoButton, { borderColor: theme.textSecondary }]}
-              textColor={theme.textSecondary}
-              contentStyle={styles.buttonContent}
-            >
+              textColor={theme.textSecondary} contentStyle={styles.buttonContent}>
               Try Demo Library
             </Button>
           </View>
@@ -349,121 +359,34 @@ export default function ConnectScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  topBar: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    zIndex: 10,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingVertical: 20,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
-    maxWidth: 500,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  iconContainer: {
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  icon: {
-    fontSize: 48,
-  },
-  title: {
-    textAlign: 'center',
-    marginBottom: 6,
-    fontWeight: '600',
-  },
-  subtitle: {
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  segmentedButtons: {
-    marginBottom: 16,
-  },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  label: {
-    marginBottom: 6,
-  },
-  input: {
-    marginBottom: 12,
-  },
-  portHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  portSpinnerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  portButton: {
-    minWidth: 48,
-  },
-  portInputCenter: {
-    flex: 1,
-    textAlign: 'center',
-  },
-  httpsContainer: {
-    marginBottom: 6,
-  },
+  safeArea: { flex: 1 },
+  keyboardView: { flex: 1 },
+  topBar: { position: 'absolute', top: 8, right: 8, zIndex: 10 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingVertical: 20 },
+  content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, maxWidth: 500, width: '100%', alignSelf: 'center' },
+  iconContainer: { alignItems: 'center', marginBottom: 12 },
+  icon: { fontSize: 48 },
+  title: { textAlign: 'center', marginBottom: 6, fontWeight: '600' },
+  subtitle: { textAlign: 'center', marginBottom: 16 },
+  segmentedButtons: { marginBottom: 16 },
+  inputContainer: { marginBottom: 16 },
+  label: { marginBottom: 6 },
+  input: { marginBottom: 12 },
+  portHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  portSpinnerContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  portButton: { minWidth: 48 },
+  portInputCenter: { flex: 1, textAlign: 'center' },
+  httpsContainer: { marginBottom: 6 },
   protocolButtons: {},
-  hint: {
-    fontSize: 11,
-    marginBottom: 10,
-  },
-  previewContainer: {
-    padding: 10,
-    borderRadius: 8,
-    marginTop: 6,
-  },
-  previewLabel: {
-    marginBottom: 3,
-    fontSize: 11,
-  },
-  previewUrl: {
-    fontWeight: '500',
-    fontSize: 13,
-  },
-  connectButton: {
-    marginBottom: 12,
-  },
-  buttonContent: {
-    paddingVertical: 6,
-  },
-  loader: {
-    marginVertical: 12,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  divider: {
-    flex: 1,
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    fontWeight: '500',
-    fontSize: 11,
-  },
-  demoButton: {
-    marginBottom: 20,
-  },
+  hint: { fontSize: 11, marginBottom: 10 },
+  previewContainer: { padding: 10, borderRadius: 8, marginTop: 6 },
+  previewLabel: { marginBottom: 3, fontSize: 11 },
+  previewUrl: { fontWeight: '500', fontSize: 13 },
+  connectButton: { marginBottom: 12 },
+  buttonContent: { paddingVertical: 6 },
+  loader: { marginVertical: 12 },
+  dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 16 },
+  divider: { flex: 1 },
+  dividerText: { marginHorizontal: 12, fontWeight: '500', fontSize: 11 },
+  demoButton: { marginBottom: 20 },
 });
