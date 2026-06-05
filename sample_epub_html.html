@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Building KavitaReader - A Christmas Gift</title>
+    <style>
+        body {
+            font-family: 'Georgia', serif;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .cover {
+            text-align: center;
+            padding: 100px 20px;
+            background: linear-gradient(135deg, #3D4A2C 0%, #5A6B47 100%);
+            color: white;
+            margin: -20px -20px 40px -20px;
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .logo {
+            font-size: 120px;
+            margin-bottom: 20px;
+        }
+        
+        .cover h1 {
+            font-size: 48px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        
+        .cover .subtitle {
+            font-size: 24px;
+            font-style: italic;
+            margin: 10px 0;
+            opacity: 0.9;
+        }
+        
+        .cover .dedication {
+            margin-top: 40px;
+            font-size: 18px;
+            opacity: 0.8;
+        }
+        
+        h1 {
+            color: #3D4A2C;
+            border-bottom: 3px solid #C86438;
+            padding-bottom: 10px;
+            margin-top: 40px;
+        }
+        
+        h2 {
+            color: #5A6B47;
+            margin-top: 30px;
+        }
+        
+        .chapter {
+            page-break-before: always;
+            margin-top: 60px;
+        }
+        
+        .highlight {
+            background-color: #FFF9E6;
+            padding: 15px;
+            border-left: 4px solid #C86438;
+            margin: 20px 0;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .emoji {
+            font-size: 1.2em;
+        }
+        
+        .stats {
+            background: #E8F5E9;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- COVER PAGE -->
+    <div class="cover">
+        <div class="logo">🏡</div>
+        <h1>Building KavitaReader</h1>
+        <div class="subtitle">A Journey from Zero to App Store</div>
+        <div class="subtitle">Christmas 2025</div>
+        <div class="dedication">
+            A gift of love for Emily<br>
+            <small>Hess Homestead • Est. 2025</small>
+        </div>
+    </div>
+
+    <!-- CHAPTER 1 -->
+    <div class="chapter">
+        <h1>Chapter 1: The Beginning</h1>
+        
+        <p>It started with a simple idea: Emily should be able to read her books anywhere, on any device. The existing Kavita Android app was clunky, and there was no iOS option at all.</p>
+        
+        <p>On November 29, 2025, Nicholas sat down with Claude (Anthropic's AI assistant) with minimal coding experience beyond basic shell scripts. The goal? Build a modern, cross-platform mobile reader app as a Christmas gift.</p>
+        
+        <div class="highlight">
+            <strong>Starting Point:</strong>
+            <ul>
+                <li>Experience: Basic shell scripting, bash</li>
+                <li>Goal: Professional iOS/Android app</li>
+                <li>Timeline: Christmas 2025</li>
+                <li>Tools: React Native, TypeScript, Expo</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- CHAPTER 2 -->
+    <div class="chapter">
+        <h1>Chapter 2: The Tech Stack</h1>
+        
+        <h2>Choosing the Right Tools</h2>
+        <p>After research, we settled on:</p>
+        
+        <ul>
+            <li><strong>React Native + Expo:</strong> Write once, deploy to iOS and Android</li>
+            <li><strong>TypeScript:</strong> Catch errors before they happen</li>
+            <li><strong>React Native Paper:</strong> Beautiful Material Design 3 components</li>
+            <li><strong>Zustand:</strong> Simple, powerful state management</li>
+            <li><strong>Axios:</strong> Reliable API communication</li>
+        </ul>
+        
+        <h2>The Kavita API</h2>
+        <p>We dove deep into Kavita's REST API, studying the OpenAPI specification and understanding how to:</p>
+        <ul>
+            <li>Authenticate with JWT tokens</li>
+            <li>Fetch libraries, series, and chapters</li>
+            <li>Handle PDF extraction and image caching</li>
+            <li>Track reading progress</li>
+            <li>Support multiple server connections</li>
+        </ul>
+    </div>
+
+    <!-- CHAPTER 3 -->
+    <div class="chapter">
+        <h1>Chapter 3: Building Block by Block</h1>
+        
+        <h2>Week 1: Foundation</h2>
+        <p>The first steps were the hardest. Learning to set up the project, understanding imports, fixing that first "App entry not found" error.</p>
+        
+        <div class="highlight">
+            <p><span class="emoji">💡</span> <strong>First Major Bug:</strong> The <code>package.json</code> had <code>"main": "App.tsx"</code> instead of <code>"main": "node_modules/expo/AppEntry.js"</code>. One line. Two hours of debugging.</p>
+        </div>
+        
+        <h2>Week 2: The UI Takes Shape</h2>
+        <p>Screens started appearing:</p>
+        <ul>
+            <li>Connect Screen - Beautiful IP/OPDS input</li>
+            <li>Login Screen - Secure authentication</li>
+            <li>Home Screen - Your libraries at a glance</li>
+            <li>Settings Screen - Personalization options</li>
+        </ul>
+        
+        <h2>Week 3: Reading Experience</h2>
+        <p>The heart of the app - the reader itself:</p>
+        <ul>
+            <li>PDF extraction and display</li>
+            <li>Page navigation with tap zones</li>
+            <li>Progress tracking and saving</li>
+            <li>Grayscale mode for eye comfort</li>
+        </ul>
+    </div>
+
+    <!-- CHAPTER 4 -->
+    <div class="chapter">
+        <h1>Chapter 4: Challenges & Solutions</h1>
+        
+        <h2>The Emoji Crisis</h2>
+        <p>Book icons appeared as weird symbols instead of emojis. Solution? Replace them all with Material Design icons. Problem solved!</p>
+        
+        <h2>The Loading Loop</h2>
+        <p>PDFs would load... and load... and load. The issue? We forgot to set <code>loading = false</code> after caching. One line of code. Classic.</p>
+        
+        <h2>The 400 Bad Request Mystery</h2>
+        <p>Pages wouldn't load. The error? We were sending <code>page=1</code> when Kavita uses 0-based indexing. It wanted <code>page=0</code>. Off-by-one errors strike again!</p>
+        
+        <div class="highlight">
+            <p><span class="emoji">🎯</span> <strong>Lesson Learned:</strong> Read the API docs carefully. Then read them again. Then check the actual API calls in the browser network tab.</p>
+        </div>
+        
+        <h2>Dark Mode Inconsistency</h2>
+        <p>The theme would work on some screens but not others. The fix? Create a centralized theme store using Zustand and ensure every screen subscribes to it.</p>
+    </div>
+
+    <!-- CHAPTER 5 -->
+    <div class="chapter">
+        <h1>Chapter 5: The Features</h1>
+        
+        <div class="stats">
+            <h2>What We Built:</h2>
+            <ul>
+                <li><span class="emoji">🔐</span> Secure JWT authentication with auto-refresh</li>
+                <li><span class="emoji">🌐</span> Multi-server support (switch between libraries)</li>
+                <li><span class="emoji">📚</span> Beautiful library and series browsers</li>
+                <li><span class="emoji">📖</span> Full-featured PDF reader with extraction</li>
+                <li><span class="emoji">🌓</span> Dark mode throughout the app</li>
+                <li><span class="emoji">🎨</span> Grayscale reading mode for eye comfort</li>
+                <li><span class="emoji">💾</span> Persistent progress tracking</li>
+                <li><span class="emoji">⚙️</span> Settings accessible from every screen</li>
+                <li><span class="emoji">🎨</span> Hess Homestead custom theming</li>
+                <li><span class="emoji">📱</span> Responsive design for phones and tablets</li>
+            </ul>
+        </div>
+        
+        <h2>The Hess Homestead Brand</h2>
+        <p>We created a custom color scheme:</p>
+        <ul>
+            <li><strong>Primary:</strong> Deep forest green (#3D4A2C) from the "H" logo</li>
+            <li><strong>Accent:</strong> Warm rust orange (#C86438) from the beet</li>
+            <li><strong>Theme:</strong> Natural, earthy, home-focused</li>
+        </ul>
+    </div>
+
+    <!-- CHAPTER 6 -->
+    <div class="chapter">
+        <h1>Chapter 6: Debugging Adventures</h1>
+        
+        <h2>The Console Emoji Revolution</h2>
+        <p>Debugging became fun with visual console logs:</p>
+        <ul>
+            <li><span class="emoji">📖</span> Chapter loading</li>
+            <li><span class="emoji">✅</span> Success</li>
+            <li><span class="emoji">❌</span> Errors</li>
+            <li><span class="emoji">🖼️</span> Images loading</li>
+            <li><span class="emoji">📡</span> Network responses</li>
+            <li><span class="emoji">📦</span> Data received</li>
+        </ul>
+        
+        <p>Now debugging feels less like work and more like watching a story unfold!</p>
+        
+        <div class="highlight">
+            <p><span class="emoji">💭</span> <strong>Nicholas:</strong> "Grandpa from Jackie Chan Adventures was right - 'One more thing!' Always one more bug to fix."</p>
+        </div>
+    </div>
+
+    <!-- CHAPTER 7 -->
+    <div class="chapter">
+        <h1>Chapter 7: The Road Ahead</h1>
+        
+        <h2>Coming Soon:</h2>
+        <ul>
+            <li><strong>EPUB Reader:</strong> Full support for reflowable text with customizable fonts and themes</li>
+            <li><strong>Download Manager:</strong> Read offline anywhere</li>
+            <li><strong>Collections Support:</strong> Organize your reading lists</li>
+            <li><strong>Reading Statistics:</strong> Track your reading habits</li>
+            <li><strong>Annotations:</strong> Highlight and take notes</li>
+        </ul>
+        
+        <h2>What We Learned:</h2>
+        <ol>
+            <li>You don't need years of experience to build something great</li>
+            <li>AI assistants like Claude can be incredible pair programmers</li>
+            <li>Documentation is your best friend (read it twice!)</li>
+            <li>Small bugs teach big lessons</li>
+            <li>Building something for someone you love is the best motivation</li>
+        </ol>
+    </div>
+
+    <!-- EPILOGUE -->
+    <div class="chapter">
+        <h1>Epilogue: For Emily</h1>
+        
+        <p>This app represents more than code and pixels. It's late nights fueled by determination and coffee. It's the joy of solving that one bug that's been plaguing you for hours. It's learning something completely new and making it work.</p>
+        
+        <p>But most of all, it's a labor of love. Every feature, every screen, every line of code was written with one person in mind: Emily.</p>
+        
+        <p>May you enjoy endless hours of reading, wherever you are, whatever device you're using. Your entire library, always in your pocket.</p>
+        
+        <div class="highlight" style="text-align: center; font-size: 1.2em; padding: 30px;">
+            <p>Merry Christmas 2025! 🎄</p>
+            <p style="margin-top: 20px;">
+                <span class="emoji">❤️</span> Made with love by Nicholas<br>
+                <span class="emoji">🤖</span> With guidance from Claude<br>
+                <span class="emoji">🏡</span> Hess Homestead
+            </p>
+        </div>
+    </div>
+
+    <!-- TECHNICAL APPENDIX -->
+    <div class="chapter">
+        <h1>Appendix: Technical Stats</h1>
+        
+        <div class="stats">
+            <h3>Project Metrics:</h3>
+            <ul>
+                <li><strong>Development Time:</strong> 3 weeks</li>
+                <li><strong>Lines of Code:</strong> ~5,000+</li>
+                <li><strong>Files Created:</strong> 25+</li>
+                <li><strong>Bug Fixes:</strong> Too many to count</li>
+                <li><strong>Coffee Consumed:</strong> Countless cups ☕</li>
+                <li><strong>Stack Overflow Visits:</strong> More than we'd like to admit</li>
+            </ul>
+            
+            <h3>Tech Stack:</h3>
+            <ul>
+                <li>React Native 0.81.5</li>
+                <li>Expo SDK 54</li>
+                <li>TypeScript 5.9</li>
+                <li>React Native Paper 5.14</li>
+                <li>Zustand 5.0</li>
+                <li>Axios 1.13</li>
+            </ul>
+        </div>
+        
+        <p style="text-align: center; margin-top: 40px; font-style: italic; color: #666;">
+            ~ End of Book ~
+        </p>
+    </div>
+</body>
+</html>

@@ -16,10 +16,11 @@ export default function ConnectScreen({ navigation }: Props) {
   const [connectionType, setConnectionType] = useState('ip');
   const [serverAddress, setServerAddress] = useState('');
   const [port, setPort] = useState('5000');
+  const [portEnabled, setPortEnabled] = useState(true); // false = reverse proxy mode, no port
   const [opdsUrl, setOpdsUrl] = useState('');
   const [useHttps, setUseHttps] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+
   const addServer = useServerStore((state) => state.addServer);
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
   const toggleDarkMode = useThemeStore((state) => state.toggleDarkMode);
@@ -31,12 +32,22 @@ export default function ConnectScreen({ navigation }: Props) {
     }
 
     let cleanAddress = serverAddress.trim();
+    // Strip any protocol prefix the user may have typed
     cleanAddress = cleanAddress.replace(/^https?:\/\//, '');
+    // Strip trailing slashes
     cleanAddress = cleanAddress.replace(/\/$/, '');
+    // Strip any port the user may have typed in the address field
     cleanAddress = cleanAddress.replace(/:\d+$/, '');
 
     const protocol = useHttps ? 'https' : 'http';
-    return `${protocol}://${cleanAddress}:${port}`;
+
+    // Only append port if port mode is enabled and port is non-empty
+    if (portEnabled && port.trim()) {
+      return `${protocol}://${cleanAddress}:${port.trim()}`;
+    }
+
+    // Reverse proxy mode — no port
+    return `${protocol}://${cleanAddress}`;
   };
 
   const handleConnect = async () => {
@@ -45,8 +56,9 @@ export default function ConnectScreen({ navigation }: Props) {
         Alert.alert('Error', 'Please enter a server address');
         return;
       }
-      if (!port.trim() || isNaN(Number(port))) {
-        Alert.alert('Error', 'Please enter a valid port number');
+      // Only validate port if port mode is enabled
+      if (portEnabled && (!port.trim() || isNaN(Number(port)))) {
+        Alert.alert('Error', 'Please enter a valid port number, or disable the port for reverse proxy setups');
         return;
       }
     } else {
@@ -57,27 +69,30 @@ export default function ConnectScreen({ navigation }: Props) {
     }
 
     setLoading(true);
-    
+
     try {
       const serverUrl = buildServerUrl();
       const client = new KavitaClient(serverUrl);
       const isConnected = await client.testConnection();
-      
+
       if (!isConnected) {
         Alert.alert(
-          'Connection Failed', 
+          'Connection Failed',
           'Cannot reach the server. Please check:\n\n' +
           '• Server is running\n' +
-          '• Address and port are correct\n' +
-          '• You\'re on the same network\n' +
-          (connectionType === 'ip' ? `• Try toggling HTTP/HTTPS\n\nAttempted: ${serverUrl}` : '')
+          '• Address is correct\n' +
+          '• You\'re on the same network (or have remote access set up)\n' +
+          (portEnabled
+            ? '• Port number is correct\n• Try toggling HTTP/HTTPS'
+            : '• Try enabling HTTPS if your reverse proxy requires it') +
+          `\n\nAttempted: ${serverUrl}`
         );
         setLoading(false);
         return;
       }
 
       navigation.navigate('Login', { serverUrl });
-      
+
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
@@ -91,8 +106,8 @@ export default function ConnectScreen({ navigation }: Props) {
       'This will let you explore the app with sample content.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Try Demo', 
+        {
+          text: 'Try Demo',
           onPress: () => {
             addServer({
               name: 'Demo Library',
@@ -109,7 +124,7 @@ export default function ConnectScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
       >
@@ -122,7 +137,7 @@ export default function ConnectScreen({ navigation }: Props) {
           />
         </View>
 
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -135,7 +150,7 @@ export default function ConnectScreen({ navigation }: Props) {
             <Text variant="headlineMedium" style={[styles.title, { color: theme.text }]}>
               KavitaReader
             </Text>
-            
+
             <Text variant="bodyMedium" style={[styles.subtitle, { color: theme.textSecondary }]}>
               Connect to your Kavita library
             </Text>
@@ -144,7 +159,7 @@ export default function ConnectScreen({ navigation }: Props) {
               value={connectionType}
               onValueChange={setConnectionType}
               buttons={[
-                { value: 'ip', label: 'IP Address', icon: 'ip-network' },
+                { value: 'ip', label: 'IP / Hostname', icon: 'ip-network' },
                 { value: 'opds', label: 'OPDS URL', icon: 'link' },
               ]}
               style={styles.segmentedButtons}
@@ -156,11 +171,11 @@ export default function ConnectScreen({ navigation }: Props) {
                 <Text variant="labelLarge" style={[styles.label, { color: theme.text }]}>
                   Server Address
                 </Text>
-                
+
                 <TextInput
                   value={serverAddress}
                   onChangeText={setServerAddress}
-                  placeholder="192.168.1.100 or myserver.com"
+                  placeholder="192.168.1.100  or  myserver.com"
                   mode="outlined"
                   style={[styles.input, { backgroundColor: theme.surface }]}
                   autoCapitalize="none"
@@ -172,10 +187,22 @@ export default function ConnectScreen({ navigation }: Props) {
                   placeholderTextColor={theme.textTertiary}
                 />
 
-                <View style={styles.portContainer}>
+                {/* Port row with enable/disable toggle for reverse proxy support */}
+                <View style={styles.portHeaderRow}>
                   <Text variant="labelLarge" style={[styles.label, { color: theme.text }]}>
                     Port
                   </Text>
+                  <Button
+                    mode="text"
+                    compact
+                    onPress={() => setPortEnabled(!portEnabled)}
+                    textColor={portEnabled ? theme.textSecondary : theme.accent}
+                  >
+                    {portEnabled ? 'Disable (reverse proxy)' : 'Enable port'}
+                  </Button>
+                </View>
+
+                {portEnabled ? (
                   <View style={styles.portSpinnerContainer}>
                     <Button
                       mode="outlined"
@@ -195,7 +222,7 @@ export default function ConnectScreen({ navigation }: Props) {
                       onChangeText={(text) => {
                         const num = text.replace(/[^0-9]/g, '');
                         if (num === '' || (parseInt(num) >= 1 && parseInt(num) <= 65535)) {
-                          setPort(num || '5000');
+                          setPort(num);
                         }
                       }}
                       mode="outlined"
@@ -218,9 +245,13 @@ export default function ConnectScreen({ navigation }: Props) {
                       +
                     </Button>
                   </View>
-                </View>
+                ) : (
+                  <Text variant="bodySmall" style={[styles.hint, { color: theme.accent }]}>
+                    ✓ Port disabled — connecting directly to hostname (reverse proxy mode)
+                  </Text>
+                )}
 
-                <View style={styles.httpsContainer}>
+                <View style={[styles.httpsContainer, { marginTop: portEnabled ? 12 : 4 }]}>
                   <Text variant="labelLarge" style={[styles.label, { color: theme.text }]}>
                     Protocol
                   </Text>
@@ -235,9 +266,11 @@ export default function ConnectScreen({ navigation }: Props) {
                     density="small"
                   />
                 </View>
-                
+
                 <Text variant="bodySmall" style={[styles.hint, { color: theme.textTertiary }]}>
-                  Default Kavita port is 5000. Protocol is usually HTTP for local networks.
+                  {portEnabled
+                    ? 'Default Kavita port is 5000. Use HTTP for local networks.'
+                    : 'Reverse proxy setups typically use HTTPS on port 443. Enable HTTPS above if needed.'}
                 </Text>
 
                 <View style={[styles.previewContainer, { backgroundColor: theme.card }]}>
@@ -256,7 +289,7 @@ export default function ConnectScreen({ navigation }: Props) {
                 <Text variant="labelLarge" style={[styles.label, { color: theme.text }]}>
                   OPDS Feed URL
                 </Text>
-                
+
                 <TextInput
                   value={opdsUrl}
                   onChangeText={setOpdsUrl}
@@ -271,7 +304,7 @@ export default function ConnectScreen({ navigation }: Props) {
                   textColor={theme.text}
                   placeholderTextColor={theme.textTertiary}
                 />
-                
+
                 <Text variant="bodySmall" style={[styles.hint, { color: theme.textTertiary }]}>
                   Paste the full OPDS feed URL from your Kavita server settings.
                 </Text>
@@ -369,8 +402,11 @@ const styles = StyleSheet.create({
   input: {
     marginBottom: 12,
   },
-  portContainer: {
-    marginBottom: 12,
+  portHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   portSpinnerContainer: {
     flexDirection: 'row',
@@ -387,8 +423,7 @@ const styles = StyleSheet.create({
   httpsContainer: {
     marginBottom: 6,
   },
-  protocolButtons: {
-  },
+  protocolButtons: {},
   hint: {
     fontSize: 11,
     marginBottom: 10,

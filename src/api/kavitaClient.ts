@@ -3,10 +3,6 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserDto } from '../types/kavita';
 
-const TOKEN_KEY = 'kavita_token';
-const REFRESH_TOKEN_KEY = 'kavita_refresh_token';
-const API_KEY = 'kavita_api_key';
-
 export class KavitaClient {
   private client: AxiosInstance;
   private baseUrl: string;
@@ -14,11 +10,23 @@ export class KavitaClient {
   private refreshToken: string | null = null;
   private apiKey: string | null = null;
 
+  // Per-server storage keys so multiple servers don't overwrite each other
+  private tokenKey: string;
+  private refreshTokenKey: string;
+  private apiKeyKey: string;
+
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
+
+    // Derive stable storage keys from the URL
+    const urlKey = this.baseUrl.replace(/[^a-zA-Z0-9]/g, '_');
+    this.tokenKey = `kavita_token_${urlKey}`;
+    this.refreshTokenKey = `kavita_refresh_${urlKey}`;
+    this.apiKeyKey = `kavita_apikey_${urlKey}`;
+
     this.client = axios.create({
       baseURL: this.baseUrl,
-      timeout: 10000, // Reduced from 30000 for faster feedback
+      timeout: 15000,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -29,16 +37,35 @@ export class KavitaClient {
   }
 
   private async loadStoredCredentials(): Promise<void> {
-    this.token = await AsyncStorage.getItem(TOKEN_KEY);
-    this.refreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
-    this.apiKey = await AsyncStorage.getItem(API_KEY);
+    try {
+      const results = await AsyncStorage.multiGet([
+        this.tokenKey,
+        this.refreshTokenKey,
+        this.apiKeyKey,
+      ]);
+      this.token = results[0][1];
+      this.refreshToken = results[1][1];
+      this.apiKey = results[2][1];
+    } catch (e) {
+      console.warn('Failed to load stored credentials:', e);
+    }
+  }
+
+  // Call this when you need credentials guaranteed to be loaded before proceeding
+  async ensureCredentialsLoaded(): Promise<void> {
+    await this.loadStoredCredentials();
+  }
+
+  async isAuthenticated(): Promise<boolean> {
+    await this.ensureCredentialsLoaded();
+    return !!this.token;
   }
 
   private setupInterceptors(): void {
     this.client.interceptors.request.use(
       async (config) => {
         if (!this.token) {
-          this.token = await AsyncStorage.getItem(TOKEN_KEY);
+          this.token = await AsyncStorage.getItem(this.tokenKey);
         }
         if (this.token && config.headers) {
           config.headers.Authorization = `Bearer ${this.token}`;
@@ -81,7 +108,7 @@ export class KavitaClient {
       return true;
     } catch (error: any) {
       console.error('❌ Connection failed:', error.message);
-      
+
       if (error.code === 'ECONNABORTED') {
         console.error('Connection timed out');
       } else if (error.code === 'ERR_NETWORK') {
@@ -91,7 +118,7 @@ export class KavitaClient {
       } else if (error.request) {
         console.error('No response received from server');
       }
-      
+
       return false;
     }
   }
@@ -108,9 +135,12 @@ export class KavitaClient {
       this.refreshToken = user.refreshToken;
       this.apiKey = user.apiKey;
 
-      await AsyncStorage.setItem(TOKEN_KEY, user.token);
-      await AsyncStorage.setItem(REFRESH_TOKEN_KEY, user.refreshToken);
-      await AsyncStorage.setItem(API_KEY, user.apiKey);
+      // Save using per-server keys so multiple servers don't collide
+      await AsyncStorage.multiSet([
+        [this.tokenKey, user.token],
+        [this.refreshTokenKey, user.refreshToken],
+        [this.apiKeyKey, user.apiKey],
+      ]);
 
       return user;
     } catch (error) {
@@ -121,7 +151,7 @@ export class KavitaClient {
   async refreshAccessToken(): Promise<string | null> {
     try {
       if (!this.refreshToken) {
-        this.refreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
+        this.refreshToken = await AsyncStorage.getItem(this.refreshTokenKey);
       }
 
       if (!this.refreshToken) {
@@ -135,7 +165,7 @@ export class KavitaClient {
 
       const newToken = response.data.token;
       this.token = newToken;
-      await AsyncStorage.setItem(TOKEN_KEY, newToken);
+      await AsyncStorage.setItem(this.tokenKey, newToken);
 
       return newToken;
     } catch (error) {
@@ -152,9 +182,11 @@ export class KavitaClient {
     this.token = null;
     this.refreshToken = null;
     this.apiKey = null;
-    await AsyncStorage.removeItem(TOKEN_KEY);
-    await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
-    await AsyncStorage.removeItem(API_KEY);
+    await AsyncStorage.multiRemove([
+      this.tokenKey,
+      this.refreshTokenKey,
+      this.apiKeyKey,
+    ]);
   }
 
   async getLibraries(): Promise<any[]> {
@@ -173,7 +205,7 @@ export class KavitaClient {
         pageNumber,
         pageSize,
       });
-      
+
       let seriesList: any[] = [];
       if (response.data.result) {
         seriesList = response.data.result;
@@ -188,11 +220,9 @@ export class KavitaClient {
         seriesList.map(async (series) => {
           try {
             const volumes = await this.getVolumes(series.id);
-            
             const totalChapters = volumes.reduce((sum, vol) => {
               return sum + (vol.chapters?.length || 0);
             }, 0);
-            
             return {
               ...series,
               volumeCount: volumes.length,
@@ -208,14 +238,9 @@ export class KavitaClient {
       return enrichedSeries;
     } catch (error) {
       console.error('all-v2 failed, trying alternative endpoint');
-      
       try {
         const response = await this.client.get('/api/Series/series', {
-          params: {
-            libraryId,
-            pageNumber,
-            pageSize
-          }
+          params: { libraryId, pageNumber, pageSize }
         });
         return response.data || [];
       } catch (error2) {
@@ -265,71 +290,64 @@ export class KavitaClient {
       throw this.handleError(error);
     }
   }
-// EPUB Support Methods
-async getBookInfo(chapterId: number): Promise<any> {
-  try {
-    console.log('📘 Fetching book info for chapter:', chapterId);
-    const response = await this.client.get(`/api/Book/${chapterId}/book-info`);
-    console.log('✅ Book info retrieved');
-    return response.data;
-  } catch (error) {
-    throw this.handleError(error);
-  }
-}
 
-async getBookPage(chapterId: number, page: number): Promise<string> {
-  try {
-    console.log(`📄 Fetching book page ${page} for chapter ${chapterId}`);
-    const response = await this.client.get(`/api/Book/${chapterId}/book-page`, {
-      params: { page }
-    });
-    console.log('✅ Book page retrieved');
-    return response.data;
-  } catch (error) {
-    throw this.handleError(error);
+  // EPUB Support Methods
+  async getBookInfo(chapterId: number): Promise<any> {
+    try {
+      console.log('📘 Fetching book info for chapter:', chapterId);
+      const response = await this.client.get(`/api/Book/${chapterId}/book-info`);
+      console.log('✅ Book info retrieved');
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
   }
-}
 
-async getBookChapters(chapterId: number): Promise<any[]> {
-  try {
-    const response = await this.client.get(`/api/Book/${chapterId}/chapters`);
-    return response.data;
-  } catch (error) {
-    throw this.handleError(error);
+  async getBookPage(chapterId: number, page: number): Promise<string> {
+    try {
+      console.log(`📄 Fetching book page ${page} for chapter ${chapterId}`);
+      const response = await this.client.get(`/api/Book/${chapterId}/book-page`, {
+        params: { page }
+      });
+      console.log('✅ Book page retrieved');
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
   }
-}
+
+  async getBookChapters(chapterId: number): Promise<any[]> {
+    try {
+      const response = await this.client.get(`/api/Book/${chapterId}/chapters`);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   async cacheChapter(chapterId: number): Promise<void> {
     try {
-      // First get chapter info to determine the format
       const chapterInfo = await this.getChapterInfo(chapterId);
       const format = chapterInfo.seriesFormat;
       const fileName = chapterInfo.fileName || '';
-      
+
       console.log('📄 Chapter format:', format);
       console.log('📁 File name:', fileName);
-      
-      // IMPORTANT: Check filename FIRST as it's most reliable
+
       const isPdf = fileName.toLowerCase().endsWith('.pdf');
       const isEpub = fileName.toLowerCase().endsWith('.epub');
-      
-      // For EPUBs - MUST CHECK FIRST
+
       if (isEpub) {
         console.log('📘 EPUB detected - caching book info');
         await this.client.get(`/api/Book/${chapterId}/book-info`);
         console.log('✅ EPUB chapter cached successfully');
-      }
-      // For PDFs, we need to extract to images
-      else if (isPdf || format === 3) {
-        console.log('📕 PDF detected - will extract on demand (no pre-cache needed)');
-        // Don't pre-cache PDFs - just let the image endpoint handle it
-        // This avoids timeout issues
+      } else if (isPdf || format === 3) {
+        console.log('📕 PDF detected - will extract on demand');
         console.log('✅ PDF ready to load');
-      } 
-      // For Archives/Images (format 0, 1, or 4), just cache first image
-      else {
+      } else {
         console.log('🖼️  Image-based format detected - caching first page');
         await this.client.get(`/api/Reader/image`, {
-          params: { 
+          params: {
             chapterId,
             page: 0,
             apiKey: this.apiKey
@@ -339,7 +357,6 @@ async getBookChapters(chapterId: number): Promise<any[]> {
       }
     } catch (error) {
       console.log('❌ Cache failed:', error);
-      // Don't throw - caching is optional, images will load on demand
     }
   }
 
@@ -357,38 +374,20 @@ async getBookChapters(chapterId: number): Promise<any[]> {
   }
 
   getCoverImageUrl(seriesId: number): string {
-    const params = new URLSearchParams({
-      seriesId: seriesId.toString(),
-    });
-    
-    if (this.apiKey) {
-      params.append('apiKey', this.apiKey);
-    }
-
+    const params = new URLSearchParams({ seriesId: seriesId.toString() });
+    if (this.apiKey) params.append('apiKey', this.apiKey);
     return `${this.baseUrl}/api/Image/series-cover?${params.toString()}`;
   }
 
   getVolumeCoverUrl(volumeId: number): string {
-    const params = new URLSearchParams({
-      volumeId: volumeId.toString(),
-    });
-    
-    if (this.apiKey) {
-      params.append('apiKey', this.apiKey);
-    }
-
+    const params = new URLSearchParams({ volumeId: volumeId.toString() });
+    if (this.apiKey) params.append('apiKey', this.apiKey);
     return `${this.baseUrl}/api/Image/volume-cover?${params.toString()}`;
   }
 
   getChapterCoverUrl(chapterId: number): string {
-    const params = new URLSearchParams({
-      chapterId: chapterId.toString(),
-    });
-    
-    if (this.apiKey) {
-      params.append('apiKey', this.apiKey);
-    }
-
+    const params = new URLSearchParams({ chapterId: chapterId.toString() });
+    if (this.apiKey) params.append('apiKey', this.apiKey);
     return `${this.baseUrl}/api/Image/chapter-cover?${params.toString()}`;
   }
 
@@ -397,11 +396,7 @@ async getBookChapters(chapterId: number): Promise<any[]> {
       chapterId: chapterId.toString(),
       page: page.toString(),
     });
-    
-    if (this.apiKey) {
-      params.append('apiKey', this.apiKey);
-    }
-
+    if (this.apiKey) params.append('apiKey', this.apiKey);
     return `${this.baseUrl}/api/Reader/image?${params.toString()}`;
   }
 
@@ -419,37 +414,22 @@ async getBookChapters(chapterId: number): Promise<any[]> {
       if (axiosError.response) {
         const status = axiosError.response.status;
         const message = (axiosError.response.data as any)?.message || axiosError.message;
-        
         switch (status) {
-          case 400:
-            return new Error(`Bad Request: ${message}`);
-          case 401:
-            return new Error('Unauthorized. Please log in again.');
-          case 403:
-            return new Error('Forbidden. You do not have permission.');
-          case 404:
-            return new Error('Resource not found.');
-          case 500:
-            return new Error('Server error. Please try again later.');
-          default:
-            return new Error(`Error ${status}: ${message}`);
+          case 400: return new Error(`Bad Request: ${message}`);
+          case 401: return new Error('Unauthorized. Please log in again.');
+          case 403: return new Error('Forbidden. You do not have permission.');
+          case 404: return new Error('Resource not found.');
+          case 500: return new Error('Server error. Please try again later.');
+          default:  return new Error(`Error ${status}: ${message}`);
         }
       } else if (axiosError.request) {
-        return new Error('No response from server. Check your connection.');
+        return new Error('No response from server. Check your connection and server URL.');
       }
     }
     return new Error('An unexpected error occurred.');
   }
 
-  getBaseUrl(): string {
-    return this.baseUrl;
-  }
-
-  getToken(): string | null {
-    return this.token;
-  }
-
-  getApiKey(): string | null {
-    return this.apiKey;
-  }
+  getBaseUrl(): string { return this.baseUrl; }
+  getToken(): string | null { return this.token; }
+  getApiKey(): string | null { return this.apiKey; }
 }

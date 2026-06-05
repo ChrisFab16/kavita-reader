@@ -1,3 +1,4 @@
+// src/screens/LoginScreen.tsx
 import React, { useState } from 'react';
 import { View, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { TextInput, Button, Text, ActivityIndicator, IconButton } from 'react-native-paper';
@@ -17,6 +18,7 @@ export default function LoginScreen({ navigation, route }: Props) {
   const [showPassword, setShowPassword] = useState(false);
 
   const addServer = useServerStore((state) => state.addServer);
+  const removeServer = useServerStore((state) => state.removeServer);
   const theme = useAppTheme();
 
   const handleLogin = async () => {
@@ -26,12 +28,16 @@ export default function LoginScreen({ navigation, route }: Props) {
     }
 
     setLoading(true);
-    
+
+    // Track whether we added a server so we can roll back on failure
+    let addedServerId: string | null = null;
+
     try {
+      // Login first — don't add server until we know credentials work
       const client = new KavitaClient(serverUrl);
-      const user = await client.login(username, password);
-      
-      const serverId = Date.now().toString();
+      await client.login(username, password);
+
+      // Login succeeded — now persist the server to the store
       addServer({
         name: serverUrl.replace(/^https?:\/\//, ''),
         url: serverUrl,
@@ -39,21 +45,39 @@ export default function LoginScreen({ navigation, route }: Props) {
         isDefault: true,
       });
 
-      Alert.alert('Success', 'Logged in successfully!');
+      // Navigate immediately — no success alert, just get out of the way
       navigation.reset({
         index: 0,
         routes: [{ name: 'Home' }],
       });
-      
+
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message);
+      // Roll back server entry if it was added before the failure
+      if (addedServerId) {
+        removeServer(addedServerId);
+      }
+
+      // Give the user a specific, actionable error message
+      let message = error.message || 'Unknown error';
+
+      if (
+        error.message?.includes('Network') ||
+        error.message?.includes('ECONNREFUSED') ||
+        error.message?.includes('No response')
+      ) {
+        message = 'Could not reach the server. Check the URL and make sure your Kavita server is running.';
+      } else if (error.message?.includes('Unauthorized') || error.message?.includes('401')) {
+        message = 'Incorrect username or password.';
+      }
+
+      Alert.alert('Login Failed', message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={[styles.container, { backgroundColor: theme.background }]}
     >
@@ -73,7 +97,7 @@ export default function LoginScreen({ navigation, route }: Props) {
         <Text variant="headlineMedium" style={[styles.title, { color: theme.text }]}>
           Sign In
         </Text>
-        
+
         <Text variant="bodyMedium" style={[styles.subtitle, { color: theme.textSecondary }]}>
           {serverUrl.replace(/^https?:\/\//, '')}
         </Text>
@@ -101,8 +125,8 @@ export default function LoginScreen({ navigation, route }: Props) {
           style={[styles.input, { backgroundColor: theme.surface }]}
           left={<TextInput.Icon icon="lock" />}
           right={
-            <TextInput.Icon 
-              icon={showPassword ? "eye-off" : "eye"} 
+            <TextInput.Icon
+              icon={showPassword ? 'eye-off' : 'eye'}
               onPress={() => setShowPassword(!showPassword)}
             />
           }
