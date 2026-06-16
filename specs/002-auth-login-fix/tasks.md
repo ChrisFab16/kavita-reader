@@ -6,4 +6,4 @@
 - [x] T004 Awaitable credential load in constructor
 - [x] T005 `clearStoredCredentials(baseUrl)` static helper
 - [x] T006 `removeServer` clears AsyncStorage credentials
-- [ ] T007 Manual quickstart sign-off
+- [x] T007 Manual quickstart sign-off — see [validation-results.md](./validation-results.md)

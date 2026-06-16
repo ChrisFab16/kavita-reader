@@ -1,30 +1,39 @@
 # KavitaReader — Agent Instructions
 
-## Spec Kit methodology (always)
+## Spec Kit methodology (NON-NEGOTIABLE)
 
-All feature work on **KavitaReader** follows the **Spec Kit** workflow. Do not jump straight to code for new features or significant changes.
+**Every code change** in this repo MUST follow the Spec Kit workflow and be traceable to `specs/<NNN>-<name>/`. See `.specify/memory/change-policy.md`.
 
 ```
 /speckit-specify → /speckit-clarify → /speckit-checklist → /speckit-plan → /speckit-tasks → /speckit-analyze → /speckit-implement
 ```
 
-**Before coding:**
+### Before ANY edit to `src/`, `App.tsx`, or `app.json`
 
-1. Read `.specify/memory/constitution.md`, `.specify/memory/project-brief.md`, and the active feature under `specs/`.
-2. Check `.specify/feature.json` for the current feature directory.
-3. Ensure `spec.md`, `plan.md`, and `tasks.md` exist (or create them via Spec Kit) before implementation.
+1. Read `.specify/feature.json` and `.specify/memory/change-policy.md`.
+2. Confirm an existing feature covers the work, or **create** `specs/<NNN>-<name>/` with `spec.md`, `plan.md`, `tasks.md` first.
+3. Add or update task IDs in `tasks.md` that the implementation will satisfy.
+4. Run mental `/speckit-analyze` — spec, plan, and tasks must agree before coding.
 
-**Before marking implement done:** `/speckit-analyze` checks spec/plan/tasks consistency only — not code, races, or runtime regressions. Run manual quickstart on a device or emulator for reader and sync changes.
+### During implementation
 
-**Before PR sign-off:** Do not check PR test-plan items or imply merge-readiness until each item is verified and recorded in `specs/<feature>/validation-results.md` (or the user explicitly signs off manual QA). If quickstart needs live credentials or a server the agent cannot access, stop after code/logcat-level checks and ask the user — do not loop on brittle `adb input` UI automation.
+- Implement only what tasks describe; mark `[x]` as you complete each task.
+- Update `plan.md` if approach changes; do not let code drift from artifacts.
+- API changes → update `contracts/` or types in the feature spec.
+- Manual QA → `quickstart.md`; sign-off → `validation-results.md`.
 
-**During implementation:**
+### Before PR / done
 
-- Execute tasks from `specs/<feature>/tasks.md` in order; mark tasks complete as you go.
-- Keep API contracts aligned with `src/api/kavitaClient.ts` and `src/types/kavita.ts`.
-- Manual QA steps belong in `quickstart.md`; sign-off in `validation-results.md` when applicable.
+- `/speckit-analyze` consistency (or `analysis-report.md` in the feature dir).
+- No unchecked tasks for shipped scope unless explicitly deferred in spec.
+- Do not check PR test-plan items without `validation-results.md` or explicit user sign-off.
+- If quickstart needs credentials the agent cannot access, ask the user — do not loop on brittle `adb input` UI automation.
 
-**Active context:** `.cursor/rules/specify-rules.mdc` (managed Spec Kit section).
+### Multi-feature branches
+
+One branch may include several `specs/00N/` directories (e.g. 001 perf + 002 auth + 003 bootstrap). Update **each** affected feature’s artifacts; set `.specify/feature.json` to the feature you are actively implementing.
+
+**Active context:** `.cursor/rules/specify-rules.mdc` · `.specify/memory/constitution.md` · `.specify/memory/project-brief.md`
 
 **Repo:** `ChrisFab16/kavita-reader` (fork) · upstream `cbytestech/kavita-reader` · package `com.hesshomestead.reader`
 

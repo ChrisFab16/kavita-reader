@@ -69,6 +69,13 @@ export interface PaginatedSeriesResult {
   pagination: PaginationMetadata | null;
 }
 
+export interface CollectionTagDto {
+  id: number;
+  title: string;
+  summary?: string;
+  promoted?: boolean;
+}
+
 export enum MangaFormat {
   Unknown = 0,
   Archive = 1,

@@ -2,13 +2,37 @@
 
 ## Request
 
+**Query parameters** (required — not in JSON body):
+
+| Param | Type | Notes |
+|-------|------|-------|
+| `libraryId` | number | Target library |
+| `PageNumber` | number | 0-based page |
+| `PageSize` | number | Items per page |
+| `context` | number | `1` for library browse |
+
+**Body** (`FilterV2Dto`):
+
 ```json
 {
-  "libraryId": 1,
-  "pageNumber": 0,
-  "pageSize": 100
+  "statements": [
+    { "field": 0, "comparison": 0, "value": "1" }
+  ],
+  "combination": 0
 }
 ```
+
+`field: 0` = Libraries, `comparison: 0` = Equal, `value` = library id string.
+
+## Collections
+
+`GET /api/Collection` — list collection tags.
+
+`GET /api/Series/series-by-collection?collectionId=N&PageNumber=0&PageSize=100` — series in a collection.
+
+## Request (legacy — wrong)
+
+Do **not** send `{ libraryId, pageNumber, pageSize }` in the POST body only; Kavita ignores library scope.
 
 ## Response (paginated)
 

@@ -1,0 +1,68 @@
+---
+alwaysApply: true
+---
+
+# KavitaReader — Spec Kit Context
+
+<!-- SPECKIT START -->
+
+## Project
+
+**KavitaReader** — Expo / React Native Android reader for self-hosted Kavita servers. Privacy-first; no telemetry.
+
+**Read first**: `AGENTS.md`, `.specify/memory/change-policy.md`, `.specify/memory/constitution.md`, `.specify/memory/project-brief.md`
+
+## Tech Stack
+
+- React Native 0.81 · Expo SDK 54 · TypeScript
+- React Navigation 7 · React Native Paper · Zustand (+ AsyncStorage persist)
+- Axios (`KavitaClient`) · EAS builds
+- Bundle: `com.hesshomestead.reader`
+
+## Structure
+
+`src/api` · `src/screens` · `src/stores` · `src/navigation` · `src/types` · `src/utils` · `src/hooks` · `src/components` · `specs/`
+
+## Code change gate (NON-NEGOTIABLE)
+
+**Do not edit application code without Spec Kit artifacts.**
+
+1. Feature directory exists under `specs/<NNN>-<name>/`
+2. `spec.md` + `plan.md` + `tasks.md` updated **before or with** the code change
+3. Each change maps to a task ID; mark tasks complete when done
+4. Run `/speckit-analyze` (or write `analysis-report.md`) before treating work as done
+5. Manual validation → `validation-results.md`
+
+If the user asks for a fix and no spec exists: **create the spec artifacts first**, then implement.
+
+## Active feature
+
+Path: `.specify/feature.json` → currently `specs/003-app-session-bootstrap`
+
+| Feature | Path | Status |
+|---------|------|--------|
+| 001 Library load | `specs/001-library-load-review/` | Phase 1b — scroll re-test pending |
+| 002 Auth login | `specs/002-auth-login-fix/` | Signed off |
+| 003 Session bootstrap | `specs/003-app-session-bootstrap/` | Implemented — QA pending |
+
+## Spec Kit Workflow
+
+```
+/speckit-constitution → /speckit-specify → /speckit-clarify → /speckit-checklist → /speckit-plan → /speckit-tasks → /speckit-analyze → /speckit-implement
+```
+
+Foundation planning MUST cover artifacts in `.specify/memory/spec-artifacts-checklist.md`.
+
+## Git Workflow
+
+Fork **`ChrisFab16/kavita-reader`** (origin) · upstream **`cbytestech/kavita-reader`**. All features under `specs/`.
+
+## Non-Negotiables
+
+- Zero analytics / ads / cloud dependency
+- Credentials stay local; no secrets in logs
+- Settings parity for user config
+- Kavita server remains source of truth for library metadata
+- **All code changes tracked in Spec Kit** (see `change-policy.md`)
+
+<!-- SPECKIT END -->

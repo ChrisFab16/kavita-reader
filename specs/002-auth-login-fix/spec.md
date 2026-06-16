@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-16
 
-**Status**: In progress
+**Status**: Implemented — manual sign-off complete (see validation-results.md)
 
 **Input**: First login attempt fails, second succeeds with same credentials. RCA: stale JWT attached to login via axios interceptor; logout does not clear AsyncStorage.
 

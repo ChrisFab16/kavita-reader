@@ -50,6 +50,35 @@ Volume/chapter structure fetched **only** on `SeriesDetailScreen` (already does 
 | F-011 | **Low** | `kavitaClient` | Request interceptor may hit AsyncStorage per request if token unset |
 | F-012 | **Low** | `types/kavita.ts` | `SeriesDto` missing count fields; encourages `any` |
 | F-013 | **Info** | Emulator | x86 emulator + 100 cover downloads adds perceived slowness after metadata loads |
+| F-014 | **High** | `LibraryDetailScreen` | Scroll jumps to top while browsing — layout shift as covers load; FlatList missing `flex: 1` |
+
+## Phase 1b — Scroll stability (2026-06-16)
+
+**Symptom:** Fast library load achieved, but manual QA reported erratic scroll (list returns to top when scrolling down).
+
+**Root cause:** Grid rows had variable height as `expo-image` covers appeared; FlatList remeasured content and lost scroll offset. List also lacked `style={{ flex: 1 }}` in the header + search + chip layout.
+
+**Changes in `LibraryDetailScreen.tsx`:**
+
+| Change | Purpose |
+|--------|---------|
+| `ITEM_HEIGHT` + `getItemLayout` | Stable row metrics for `numColumns={2}` grid |
+| `style={{ flex: 1 }}` on FlatList | Bounded list viewport |
+| `removeClippedSubviews={false}` (Android) | Reduce scroll glitches with images |
+| Memoized `SeriesCard` | Fewer cell re-renders while scrolling |
+| Remove cover `transition` | Avoid layout flicker during scroll |
+| `hasSeriesRef` — loader only when no data | Prevent list unmount on background refetch |
+| Stable client via `serverUrl` selector | Avoid spurious reloads from Zustand |
+
+**Validation:** See [validation-results.md](./validation-results.md) — re-test pending.
+
+## Phase 1c — Cover-load scroll jump (2026-06-16)
+
+**Symptom:** Scroll better after 1b, but still jumped when new covers loaded from server while scrolling.
+
+**Root cause:** `numColumns={2}` + `getItemLayout` miscounts offsets on Android; optional subtitle/progress changed cell height; cover decode in flexible slot triggered content-size updates.
+
+**Fix:** Explicit row pairing (two cards per FlatList item); fixed `ROW_HEIGHT`; cover frame with placeholder color; reserved subtitle + progress slot; `Image.prefetch` for visible and next 3 rows; `cachePolicy="memory-disk"`, `transition={0}`.
 
 ## Contracts
 

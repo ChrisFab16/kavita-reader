@@ -6,6 +6,14 @@ import { Image } from 'expo-image';
 import { useServerStore } from '../stores/serverStore';
 import { useThemeStore } from '../stores/themeStore';
 import { createScreenLogger } from '../utils/debugLogger';
+import {
+  shouldHideVolumeHeader,
+  formatVolumeTitle,
+  formatSeriesStatsLabel,
+  shouldCollapseVolumeToHeader,
+  chaptersToRender,
+  formatChapterTitle,
+} from '../utils/volumeDisplay';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
@@ -177,77 +185,77 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
       navigation.navigate('Reader', {
         chapterId: chapter.id,
         seriesId: seriesId,
+        chapterFormat: chapter.format,
+        fileName: chapter.fileName,
       });
     } catch (error) {
       logger.warn('Cache failed, navigating anyway');
       navigation.navigate('Reader', {
         chapterId: chapter.id,
         seriesId: seriesId,
+        chapterFormat: chapter.format,
+        fileName: chapter.fileName,
       });
     }
   };
 
-  // ✅ Smart chapter title that shows filename for books
-  const getChapterDisplayTitle = (chapter: any, index: number): string => {
-    // If there's a title, use it
-    if (chapter.titleName && chapter.titleName !== chapter.range) {
-      return chapter.titleName;
-    }
-    
-    // If there's a range, use it
-    if (chapter.range && chapter.range !== '0') {
-      return `Chapter ${chapter.range}`;
-    }
-    
-    // For books (EPUB/PDF), show the filename without extension
-    if (chapter.fileName && typeof chapter.fileName === 'string') {
-      const fileName = chapter.fileName.replace(/\.[^/.]+$/, ''); // Remove extension
-      if (fileName && fileName !== '0' && !fileName.match(/^\d+$/)) {
-        return fileName;
-      }
-    }
-    
-    // Fallback
-    return `Book ${index + 1}`;
-  };
+  // Chapter title for multi-chapter volumes (archive sentinel handled in volumeDisplay)
+  const getChapterDisplayTitle = (volume: any, chapter: any, index: number): string =>
+    formatChapterTitle(chapter, volume, index);
 
-  // ✅ Determine if we should hide the volume header (for loose leaf collections)
-  const shouldHideVolumeHeader = (volume: any): boolean => {
-    const chapters = volume.chapters || [];
-    
-    if (!volume.name || typeof volume.name !== 'string') {
-      return true;
-    }
-    
-    // Hide if volume name starts with a minus (like "-100000")
-    if (volume.name.startsWith('-')) {
-      return true;
-    }
-    
-    // Hide if volume name is just a number (positive or negative)
-    if (volume.name.match(/^-?\d+$/)) {
-      return true;
-    }
-    
-    // Hide if marked as loose leaf
-    if (volume.name === '0' || volume.minNumber === 0) {
-      return true;
-    }
-    
-    // Hide if there's only 1 chapter and the volume looks auto-generated
-    if (chapters.length === 1 && volume.name.match(/^\d+$/)) {
-      return true;
-    }
-    
-    return false;
-  };
+  const hideVolumeHeader = (volume: any): boolean =>
+    shouldHideVolumeHeader(volume, volumes);
+
+  const renderChapterMeta = (
+    chapter: any,
+    fileType: string,
+    fileColor: string,
+    fileIcon: string,
+    progress: number
+  ) => (
+    <>
+      <View style={styles.chapterMeta}>
+        <Text variant="bodySmall" style={{ color: theme.textSecondary }}>
+          {chapter.pages} pages
+        </Text>
+        {chapter.pagesRead > 0 && (
+          <>
+            <Text style={{ color: theme.textSecondary }}> • </Text>
+            <Text variant="bodySmall" style={{ color: theme.primary }}>
+              {Math.round(progress)}% read
+            </Text>
+          </>
+        )}
+      </View>
+      {progress > 0 && (
+        <View style={[styles.progressBar, { backgroundColor: theme.border }]}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${progress}%`, backgroundColor: theme.primary },
+            ]}
+          />
+        </View>
+      )}
+      <View style={styles.fileTypeRow}>
+        <Chip
+          icon={fileIcon}
+          style={[styles.fileTypeChip, { backgroundColor: fileColor }]}
+          textStyle={{ color: '#fff', fontSize: 12, fontWeight: '600' }}
+          compact={false}
+        >
+          {fileType}
+        </Chip>
+      </View>
+    </>
+  );
 
   const renderChapterItem = (volume: any, chapter: any, index: number) => {
     const fileType = getFileTypeLabel(chapter);
     const fileColor = getFileTypeColor(chapter);
     const fileIcon = getFileIcon(chapter);
     const progress = chapter.pagesRead > 0 ? (chapter.pagesRead / chapter.pages) * 100 : 0;
-    const displayTitle = getChapterDisplayTitle(chapter, index);
+    const displayTitle = getChapterDisplayTitle(volume, chapter, index);
     
     // Debug log the first few chapters to see what data we have
     if (index < 2) {
@@ -272,43 +280,7 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
               <Text variant="bodyLarge" style={[styles.chapterTitle, { color: theme.text }]}>
                 {displayTitle}
               </Text>
-              
-              <View style={styles.chapterMeta}>
-                <Text variant="bodySmall" style={{ color: theme.textSecondary }}>
-                  {chapter.pages} pages
-                </Text>
-                {chapter.pagesRead > 0 && (
-                  <>
-                    <Text style={{ color: theme.textSecondary }}> • </Text>
-                    <Text variant="bodySmall" style={{ color: theme.primary }}>
-                      {Math.round(progress)}% read
-                    </Text>
-                  </>
-                )}
-              </View>
-              
-              {progress > 0 && (
-                <View style={[styles.progressBar, { backgroundColor: theme.border }]}>
-                  <View 
-                    style={[
-                      styles.progressFill,
-                      { width: `${progress}%`, backgroundColor: theme.primary }
-                    ]} 
-                  />
-                </View>
-              )}
-              
-              {/* ✅ File type chip moved to bottom */}
-              <View style={styles.fileTypeRow}>
-                <Chip 
-                  icon={fileIcon}
-                  style={[styles.fileTypeChip, { backgroundColor: fileColor }]}
-                  textStyle={{ color: '#fff', fontSize: 12, fontWeight: '600' }}
-                  compact={false}
-                >
-                  {fileType}
-                </Chip>
-              </View>
+              {renderChapterMeta(chapter, fileType, fileColor, fileIcon, progress)}
             </View>
             
             <IconButton
@@ -324,12 +296,18 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
 
   const renderVolume = (volume: any) => {
     const chapters = volume.chapters || [];
-    const hideHeader = shouldHideVolumeHeader(volume);
-    
-    return (
-      <View key={volume.id} style={styles.volumeSection}>
-        {!hideHeader && (
-          <View style={styles.volumeHeader}>
+    const hideHeader = hideVolumeHeader(volume);
+    const collapsed = shouldCollapseVolumeToHeader(volume, volumes);
+    const primaryChapter = collapsed ? chapters[0] : null;
+    const visibleChapters = chaptersToRender(volume, volumes);
+
+    const renderVolumeHeader = () => {
+      if (hideHeader || !primaryChapter) {
+        if (hideHeader) {
+          return null;
+        }
+        return (
+          <View style={[styles.volumeHeader, { backgroundColor: theme.surface }]}>
             <Image
               source={{ uri: getCoverUrl(volume.id) }}
               style={styles.volumeCover}
@@ -337,17 +315,55 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
             />
             <View style={styles.volumeInfo}>
               <Text variant="titleMedium" style={[styles.volumeTitle, { color: theme.text }]}>
-                {volume.name}
+                {formatVolumeTitle(volume)}
               </Text>
               <Text variant="bodySmall" style={{ color: theme.textSecondary }}>
                 {chapters.length} {chapters.length === 1 ? 'item' : 'items'}
               </Text>
             </View>
           </View>
-        )}
-        
+        );
+      }
+
+      const fileType = getFileTypeLabel(primaryChapter);
+      const fileColor = getFileTypeColor(primaryChapter);
+      const fileIcon = getFileIcon(primaryChapter);
+      const progress =
+        primaryChapter.pagesRead > 0 && primaryChapter.pages
+          ? (primaryChapter.pagesRead / primaryChapter.pages) * 100
+          : 0;
+
+      return (
+        <TouchableOpacity onPress={() => handleChapterPress(volume, primaryChapter)}>
+          <Card style={[styles.volumeCard, { backgroundColor: theme.surface }]}>
+            <Card.Content style={styles.volumeCardContent}>
+              <Image
+                source={{ uri: getCoverUrl(volume.id) }}
+                style={styles.volumeCoverLarge}
+                contentFit="cover"
+              />
+              <View style={styles.volumeCardInfo}>
+                <Text variant="titleMedium" style={[styles.volumeTitle, { color: theme.text }]}>
+                  {formatVolumeTitle(volume)}
+                </Text>
+                {renderChapterMeta(primaryChapter, fileType, fileColor, fileIcon, progress)}
+              </View>
+              <IconButton
+                icon="chevron-right"
+                size={20}
+                iconColor={theme.textSecondary}
+              />
+            </Card.Content>
+          </Card>
+        </TouchableOpacity>
+      );
+    };
+
+    return (
+      <View key={volume.id} style={styles.volumeSection}>
+        {renderVolumeHeader()}
         <View style={styles.chaptersList}>
-          {chapters.map((chapter: any, index: number) => 
+          {visibleChapters.map((chapter: any, index: number) =>
             renderChapterItem(volume, chapter, index)
           )}
         </View>
@@ -379,9 +395,8 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
   }
 
   logger.render_phase(`Rendering series: ${series.name}`);
-  
-  // ✅ Count total items across all volumes
-  const totalItems = volumes.reduce((sum, vol) => sum + (vol.chapters?.length || 0), 0);
+
+  const seriesStatsLabel = formatSeriesStatsLabel(volumes);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -402,13 +417,12 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
               </Text>
             )}
             <View style={styles.statsRow}>
-              {/* ✅ Show total items instead of volumes for book collections */}
               <Chip 
                 icon="book-open-variant" 
                 style={{ backgroundColor: theme.primaryLight }}
                 textStyle={{ color: '#fff', fontWeight: '600' }}
               >
-                {totalItems} {totalItems === 1 ? 'Book' : 'Books'}
+                {seriesStatsLabel}
               </Chip>
             </View>
           </View>
@@ -473,6 +487,26 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     padding: 12,
     borderRadius: 8,
+  },
+  volumeCard: {
+    elevation: 1,
+    marginBottom: 8,
+  },
+  volumeCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 12,
+  },
+  volumeCardInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  volumeCoverLarge: {
+    width: 50,
+    height: 75,
+    borderRadius: 4,
+    backgroundColor: '#E0E0E0',
   },
   volumeCover: {
     width: 60,

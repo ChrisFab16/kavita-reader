@@ -21,6 +21,13 @@
 3. **Pass**: Logcat shows **one** `all-v2` (or one per page), **zero** `volumes` calls until opening a series.
 4. Pull-to-refresh: grid stays visible; refresh indicator only.
 5. Disconnect server / invalid token: error message, no infinite spinner.
+6. **Scroll stability**: Scroll down through 50+ series — list must **not** jump back to the top as covers load.
+
+## After Phase 1b scroll fix
+
+1. Reload app (Metro) after `LibraryDetailScreen` scroll changes.
+2. Open large library, scroll continuously for 10+ seconds.
+3. **Pass**: Scroll position preserved; no snap to top.
 
 ## After Phase 2 fix
 

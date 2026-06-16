@@ -15,9 +15,9 @@ export type RootStackParamList = {
   Connect: undefined;
   Login: { serverUrl: string };
   Home: undefined;
-  LibraryDetail: { libraryId: number; libraryName: string };
+  LibraryDetail: { libraryId?: number; libraryName: string; collectionId?: number };
   SeriesDetail: { seriesId: number };
-  Reader: { chapterId: number; seriesId: number };
+  Reader: { chapterId: number; seriesId: number; chapterFormat?: number; fileName?: string };
   Settings: undefined;
 };
 
@@ -25,14 +25,15 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 interface AppNavigatorProps {
   theme: NavTheme;
+  initialRouteName?: keyof RootStackParamList;
 }
 
-export default function AppNavigator({ theme }: AppNavigatorProps) {
+export default function AppNavigator({ theme, initialRouteName = 'Connect' }: AppNavigatorProps) {
   return (
     <NavigationContainer theme={theme}>
       <Stack.Navigator 
         id="main-stack"
-        initialRouteName="Connect"
+        initialRouteName={initialRouteName}
         screenOptions={{
           headerStyle: { 
             backgroundColor: theme.colors.primary,
@@ -56,32 +57,16 @@ export default function AppNavigator({ theme }: AppNavigatorProps) {
         <Stack.Screen 
           name="Home" 
           component={HomeScreen}
-          options={({ navigation }) => ({
+          options={{
             title: 'My Libraries',
             headerLeft: () => null,
-            headerRight: () => (
-              <IconButton
-                icon="cog"
-                iconColor="#fff"
-                size={24}
-                onPress={() => navigation.navigate('Settings')}
-              />
-            ),
-          })}
+          }}
         />
         <Stack.Screen 
           name="LibraryDetail" 
           component={LibraryDetailScreen}
-          options={({ route, navigation }) => ({ 
+          options={({ route }) => ({ 
             title: route.params.libraryName,
-            headerRight: () => (
-              <IconButton
-                icon="cog"
-                iconColor="#fff"
-                size={24}
-                onPress={() => navigation.navigate('Settings')}
-              />
-            ),
           })}
         />
         <Stack.Screen 

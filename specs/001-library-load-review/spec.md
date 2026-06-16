@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-16
 
-**Status**: Draft — review complete, remediation pending
+**Status**: Phase 1 implemented — manual QA in progress (scroll fix T020 pending re-test)
 
 **Input**: User reports loading a real library is slow on the emulator. Request comprehensive code review for correctness and performance bottlenecks using Spec Kit.
 
@@ -23,6 +23,19 @@ As a reader, when I open a library with many series, I see the grid within a few
 1. **Given** a library with 100 series, **When** LibraryDetail opens, **Then** at most **one** paginated series list API call runs before the grid renders.
 2. **Given** series list is loaded, **When** subtitle text shows volume/book counts, **Then** counts come from list payload fields (`pages`, `pagesRead`, `volumes`, `chapters` or equivalent) — not per-series volume fetches.
 3. **Given** pull-to-refresh, **When** user refreshes, **Then** inline refresh indicator is used without full-screen blocking loader.
+
+---
+
+### User Story 1b - Stable library grid scroll (Priority: P1)
+
+As a reader browsing a large library, I can scroll through the series grid without the list jumping back to the top.
+
+**Why this priority**: Discovered during Phase 1 manual QA; makes a fast library unusable.
+
+**Acceptance Scenarios**:
+
+1. **Given** a library with 50+ series and covers loading progressively, **When** user scrolls down, **Then** scroll offset is preserved (no snap to top).
+2. **Given** fixed grid layout, **When** images finish loading, **Then** row heights do not invalidate scroll position.
 
 ---
 
@@ -57,6 +70,7 @@ As a reader opening a large series, chapter list scrolls smoothly without loadin
 - **FR-004**: Pull-to-refresh MUST NOT toggle full-screen `loading` state.
 - **FR-005**: `getSeriesInfo` MUST use Kavita list fields already present on `SeriesDto` (`pages`, `pagesRead`; verify `volumes`/`chapters` count fields from live API).
 - **FR-006**: Cross-server search (`searchSeriesAcrossServers`) MUST NOT use unbounded `getSeries` enrichment until list path is fixed.
+- **FR-007**: Library `FlatList` MUST use stable row measurements (`getItemLayout` or fixed item height) so cover image decode does not reset scroll offset.
 
 ## Non-Functional Requirements
 
