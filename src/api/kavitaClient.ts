@@ -1,8 +1,24 @@
 // src/api/kavitaClient.ts
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponseHeaders } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { PaginatedSeriesResult, SeriesDto, UserDto, CollectionTagDto } from '../types/kavita';
+import {
+  PaginatedSeriesResult,
+  SeriesDto,
+  UserDto,
+  CollectionTagDto,
+  ProgressDto,
+  ChapterInfoDto,
+} from '../types/kavita';
 import { filterSeriesForLibrary, hasCrossLibrarySeries } from '../utils/seriesLibraryFilter';
+import { parsePaginationHeader } from '../utils/kavitaPagination';
+import { buildLibraryFilterBody } from './kavitaFilterV2';
+import type { LibrarySortMode } from '../utils/seriesPagination';
+import {
+  extractApiErrorMessage,
+  normalizeChapterInfo,
+  normalizeProgressDto,
+} from '../utils/kavitaDto';
+import { validateProgressPayload } from '../utils/readingProgress';
 
 const PUBLIC_API_PATHS = new Set([
   '/api/health',
@@ -268,12 +284,21 @@ export class KavitaClient {
     }
   }
 
-  private parseSeriesListResponse(data: unknown): PaginatedSeriesResult {
+  private parseSeriesListResponse(
+    data: unknown,
+    responseHeaders?: AxiosResponseHeaders | Record<string, unknown>
+  ): PaginatedSeriesResult {
+    const paginationFromHeader = parsePaginationHeader(responseHeaders ?? null);
+
     if (data && typeof data === 'object' && !Array.isArray(data)) {
       const obj = data as Record<string, unknown>;
-      const pagination = (obj.pagination as PaginatedSeriesResult['pagination']) ?? null;
+      const paginationFromBody =
+        (obj.pagination as PaginatedSeriesResult['pagination']) ??
+        (obj.paginationMetadata as PaginatedSeriesResult['pagination']) ??
+        null;
+      const pagination = paginationFromBody ?? paginationFromHeader;
 
-      for (const key of ['result', 'items', 'series'] as const) {
+      for (const key of ['result', 'items', 'series', 'results'] as const) {
         const candidate = obj[key];
         if (Array.isArray(candidate)) {
           return { result: candidate as SeriesDto[], pagination };
@@ -282,11 +307,24 @@ export class KavitaClient {
     }
 
     if (Array.isArray(data)) {
-      return { result: data as SeriesDto[], pagination: null };
+      return { result: data as SeriesDto[], pagination: paginationFromHeader };
     }
 
     console.warn('Unexpected series list response structure:', data);
-    return { result: [], pagination: null };
+    return { result: [], pagination: paginationFromHeader };
+  }
+
+  /** Kavita query params use 1-based page numbers. */
+  private toApiPageNumber(pageNumber: number): number {
+    return pageNumber + 1;
+  }
+
+  private buildSeriesQueryParams(libraryId: number, pageNumber: number, pageSize: number) {
+    return {
+      libraryId,
+      PageNumber: this.toApiPageNumber(pageNumber),
+      PageSize: pageSize,
+    };
   }
 
   private noCacheHeaders(noCache?: boolean) {
@@ -295,17 +333,8 @@ export class KavitaClient {
       : undefined;
   }
 
-  private libraryFilterBody(libraryId: number) {
-    return {
-      statements: [
-        {
-          field: 0,
-          comparison: 0,
-          value: String(libraryId),
-        },
-      ],
-      combination: 0,
-    };
+  private libraryFilterBody(libraryId: number, sortBy?: LibrarySortMode) {
+    return buildLibraryFilterBody(libraryId, sortBy);
   }
 
   private scopeSeriesToLibrary(series: SeriesDto[], libraryId: number): SeriesDto[] {
@@ -316,73 +345,55 @@ export class KavitaClient {
     libraryId: number,
     pageNumber: number = 0,
     pageSize: number = 50,
-    options?: { noCache?: boolean }
+    options?: { noCache?: boolean; sortBy?: LibrarySortMode }
   ): Promise<PaginatedSeriesResult> {
     const headers = this.noCacheHeaders(options?.noCache);
-    const queryParams = {
-      libraryId,
-      PageNumber: pageNumber,
-      PageSize: pageSize,
-      context: 1,
-    };
+    const sortBy = options?.sortBy ?? 'name';
+    const queryParams = this.buildSeriesQueryParams(libraryId, pageNumber, pageSize);
+    const filterBody = this.libraryFilterBody(libraryId, sortBy);
+    const filterBodyNoSort = this.libraryFilterBody(libraryId);
 
     const attempts: Array<() => Promise<PaginatedSeriesResult>> = [
       async () => {
-        const response = await this.client.post('/api/Series/all-v2', this.libraryFilterBody(libraryId), {
+        const response = await this.client.post('/api/Series/all-v2', filterBodyNoSort, {
           params: queryParams,
           headers,
         });
-        return this.parseSeriesListResponse(response.data);
+        return this.parseSeriesListResponse(response.data, response.headers);
       },
       async () => {
-        const response = await this.client.post('/api/Series/all-v2', {}, {
+        const response = await this.client.post('/api/Series/all-v2', filterBody, {
           params: queryParams,
           headers,
         });
-        return this.parseSeriesListResponse(response.data);
+        return this.parseSeriesListResponse(response.data, response.headers);
       },
       async () => {
-        const response = await this.client.post(
-          '/api/Series/all-v2',
-          { libraryId, pageNumber, pageSize },
-          { params: { libraryId, PageNumber: pageNumber, PageSize: pageSize }, headers }
-        );
-        return this.parseSeriesListResponse(response.data);
-      },
-      async () => {
-        const response = await this.client.get('/api/Series/series', {
-          params: { libraryId, pageNumber, pageSize },
+        const response = await this.client.post('/api/Series/v2', filterBodyNoSort, {
+          params: queryParams,
           headers,
         });
-        const items = Array.isArray(response.data) ? response.data : [];
-        return { result: items, pagination: null };
+        return this.parseSeriesListResponse(response.data, response.headers);
       },
     ];
-
-    let lastUnscoped: PaginatedSeriesResult | null = null;
 
     for (const attempt of attempts) {
       try {
         const parsed = await attempt();
         const scoped = this.scopeSeriesToLibrary(parsed.result, libraryId);
 
-        if (scoped.length > 0) {
-          return { result: scoped, pagination: parsed.pagination };
+        if (scoped.length === 0) {
+          continue;
         }
 
-        if (parsed.result.length > 0) {
-          if (hasCrossLibrarySeries(parsed.result, libraryId)) {
-            continue;
-          }
-          lastUnscoped = parsed;
+        if (hasCrossLibrarySeries(parsed.result, libraryId)) {
+          continue;
         }
+
+        return { result: scoped, pagination: parsed.pagination };
       } catch (error) {
         console.error('getSeriesList attempt failed:', error);
       }
-    }
-
-    if (lastUnscoped) {
-      return lastUnscoped;
     }
 
     return { result: [], pagination: null };
@@ -426,12 +437,12 @@ export class KavitaClient {
       const response = await this.client.get('/api/Series/series-by-collection', {
         params: {
           collectionId,
-          PageNumber: pageNumber,
+          PageNumber: this.toApiPageNumber(pageNumber),
           PageSize: pageSize,
         },
         headers: this.noCacheHeaders(options?.noCache),
       });
-      return this.parseSeriesListResponse(response.data);
+      return this.parseSeriesListResponse(response.data, response.headers);
     } catch (error) {
       throw this.handleError(error);
     }
@@ -475,7 +486,7 @@ export class KavitaClient {
     libraryId: number,
     pageNumber: number = 0,
     pageSize: number = 50,
-    options?: { noCache?: boolean }
+    options?: { noCache?: boolean; sortBy?: LibrarySortMode }
   ): Promise<SeriesDto[]> {
     const { result } = await this.getSeriesList(libraryId, pageNumber, pageSize, options);
     return this.scopeSeriesToLibrary(result, libraryId);
@@ -523,12 +534,23 @@ export class KavitaClient {
     }
   }
 
-  async getChapterInfo(chapterId: number): Promise<any> {
+  async getChapterInfo(chapterId: number): Promise<ChapterInfoDto> {
     try {
       const response = await this.client.get(`/api/Reader/chapter-info`, {
         params: { chapterId }
       });
-      return response.data;
+      return normalizeChapterInfo(response.data);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async getProgress(chapterId: number): Promise<ProgressDto> {
+    try {
+      const response = await this.client.get(`/api/Reader/get-progress`, {
+        params: { chapterId },
+      });
+      return normalizeProgressDto(response.data);
     } catch (error) {
       throw this.handleError(error);
     }
@@ -603,17 +625,67 @@ export class KavitaClient {
     }
   }
 
-  async markProgress(seriesId: number, volumeId: number, chapterId: number, pageNum: number): Promise<void> {
+  async markProgress(payload: ProgressDto): Promise<void> {
+    const resolved = await this.resolveProgressPayload(payload);
+    validateProgressPayload(resolved);
+
     try {
+      console.log('[progress] POST /api/Reader/progress', JSON.stringify(resolved));
       await this.client.post('/api/Reader/progress', {
-        seriesId,
-        volumeId,
-        chapterId,
-        pageNum,
+        seriesId: resolved.seriesId,
+        volumeId: resolved.volumeId,
+        chapterId: resolved.chapterId,
+        pageNum: resolved.pageNum,
+        libraryId: resolved.libraryId,
+        ...(resolved.bookScrollId ? { bookScrollId: resolved.bookScrollId } : {}),
       });
     } catch (error) {
-      console.error('Failed to save progress:', error);
+      if (axios.isAxiosError(error) && error.response) {
+        console.warn(
+          '[progress] save failed',
+          error.response.status,
+          extractApiErrorMessage(error.response.data, error.message)
+        );
+      }
+      throw this.handleError(error);
     }
+  }
+
+  /** Fill missing ids from chapter-info / get-progress / series metadata. */
+  private async resolveProgressPayload(payload: ProgressDto): Promise<ProgressDto> {
+    if (
+      payload.seriesId > 0 &&
+      payload.volumeId > 0 &&
+      payload.libraryId > 0
+    ) {
+      return payload;
+    }
+
+    const [chapterInfo, progress] = await Promise.all([
+      this.getChapterInfo(payload.chapterId),
+      this.getProgress(payload.chapterId),
+    ]);
+
+    let seriesId = payload.seriesId || chapterInfo.seriesId || progress.seriesId;
+    let volumeId = payload.volumeId || chapterInfo.volumeId || progress.volumeId;
+    let libraryId = payload.libraryId || chapterInfo.libraryId || progress.libraryId;
+
+    if (libraryId <= 0 && seriesId > 0) {
+      const series = await this.getSeriesById(seriesId);
+      const raw = series && typeof series === 'object' ? series as Record<string, unknown> : {};
+      libraryId = typeof raw.libraryId === 'number'
+        ? raw.libraryId
+        : typeof raw.LibraryId === 'number'
+          ? raw.LibraryId
+          : libraryId;
+    }
+
+    return {
+      ...payload,
+      seriesId,
+      volumeId,
+      libraryId,
+    };
   }
 
   getCoverImageUrl(seriesId: number): string {
@@ -656,7 +728,10 @@ export class KavitaClient {
       const axiosError = error as AxiosError;
       if (axiosError.response) {
         const status = axiosError.response.status;
-        const message = (axiosError.response.data as any)?.message || axiosError.message;
+        const message = extractApiErrorMessage(
+          axiosError.response.data,
+          axiosError.message
+        );
         switch (status) {
           case 400: return new Error(`Bad Request: ${message}`);
           case 401: return new Error('Unauthorized. Please log in again.');

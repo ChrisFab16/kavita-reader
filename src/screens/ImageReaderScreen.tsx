@@ -1,5 +1,5 @@
 // src/screens/ImageReaderScreen.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,13 +7,17 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Platform,
   Image as RNImage,
+  BackHandler,
 } from 'react-native';
 import { Text, IconButton, ProgressBar } from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { useServerStore } from '../stores/serverStore';
 import { useThemeStore } from '../stores/themeStore';
+import { exitReader, readerChromeOverlay } from '../utils/readerNavigation';
+import { buildProgressPayload } from '../utils/readingProgress';
+import type { ChapterInfoDto, ProgressDto } from '../types/kavita';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
@@ -23,13 +27,15 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 export default function ImageReaderScreen({ route, navigation }: Props) {
-  const { chapterId, seriesId } = route.params;
+  const { chapterId, seriesId, volumeId, libraryId } = route.params;
   
-  const [chapterInfo, setChapterInfo] = useState<any>(null);
+  const [chapterInfo, setChapterInfo] = useState<ChapterInfoDto | null>(null);
+  const [progressHint, setProgressHint] = useState<ProgressDto | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showControls, setShowControls] = useState(true);
+  const [progressSaveError, setProgressSaveError] = useState<string | null>(null);
   const [imageData, setImageData] = useState<string>('');
   const [imageLoading, setImageLoading] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -43,19 +49,11 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
     loadChapter();
     
     return () => {
-      saveProgress();
       if (sound) {
         sound.unloadAsync();
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (currentPage > 0 && chapterInfo) {
-      const timeout = setTimeout(() => saveProgress(), 1000);
-      return () => clearTimeout(timeout);
-    }
-  }, [currentPage]);
 
   useEffect(() => {
     if (!loading && chapterInfo) {
@@ -101,13 +99,17 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
       console.log('    ✅ Chapter info received');
       console.log('    ℹ️ Title:', info.title);
       console.log('    ℹ️ Total pages:', info.pages);
-      console.log('    ℹ️ Current page:', info.currentPage || 0);
+      console.log('    ℹ️ Library ID:', info.libraryId);
       console.log('    ℹ️ File name:', info.fileName);
+
+      const progress = await client.getProgress(chapterId);
+      console.log('    ℹ️ Saved progress page:', progress.pageNum);
+      setProgressHint(progress);
       
       setChapterInfo(info);
       setTotalPages(info.pages || 0);
       
-      const startPage = (info.currentPage && info.currentPage > 0) ? info.currentPage : 0;
+      const startPage = progress.pageNum > 0 ? progress.pageNum : 0;
       console.log('  📄 Starting at page:', startPage + 1, '(0-indexed:', startPage + ')');
       setCurrentPage(startPage);
       
@@ -208,30 +210,55 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
     }
   };
 
-  const saveProgress = async () => {
-    if (!client || !chapterInfo) {
-      console.log('⚠️ Cannot save progress - missing client or chapter info');
+  const saveProgress = useCallback(async () => {
+    if (!client || !chapterInfo || currentPage <= 0) {
       return;
     }
-    
-    console.log('💾 Saving reading progress...');
-    console.log('  ℹ️ Series ID:', seriesId);
-    console.log('  ℹ️ Chapter ID:', chapterId);
-    console.log('  ℹ️ Page:', currentPage + 1, '/', totalPages);
-    
+
     try {
       await client.markProgress(
-        seriesId,
-        chapterInfo.volumeId,
-        chapterId,
-        currentPage
+        buildProgressPayload(chapterInfo, chapterId, currentPage, {
+          seriesIdFallback: seriesId,
+          volumeIdFallback: volumeId,
+          libraryIdFallback: libraryId,
+          progressHint,
+        })
       );
-      console.log('  ✅ Progress saved successfully');
+      setProgressSaveError(null);
     } catch (error) {
-      console.log('  ❌ Failed to save progress');
-      console.log('    ℹ️ Error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to save reading progress';
+      console.warn('Failed to save progress:', message);
+      setProgressSaveError(message);
     }
-  };
+  }, [client, chapterInfo, progressHint, seriesId, volumeId, libraryId, chapterId, currentPage]);
+
+  const saveProgressRef = useRef(saveProgress);
+  saveProgressRef.current = saveProgress;
+
+  useEffect(() => {
+    return () => {
+      void saveProgressRef.current();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (currentPage > 0 && chapterInfo) {
+      const timeout = setTimeout(() => saveProgress(), 1000);
+      return () => clearTimeout(timeout);
+    }
+  }, [currentPage, chapterInfo, saveProgress]);
+
+  const handleExit = useCallback(() => {
+    exitReader(navigation, saveProgress);
+  }, [navigation, saveProgress]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleExit();
+      return true;
+    });
+    return () => sub.remove();
+  }, [handleExit]);
 
   const goToNextPage = () => {
     if (currentPage < totalPages - 1) {
@@ -247,10 +274,7 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
           { text: 'Stay Here', style: 'cancel' },
           { 
             text: 'Go Back', 
-            onPress: () => {
-              saveProgress();
-              navigation.goBack();
-            }
+            onPress: handleExit,
           },
         ]
       );
@@ -311,37 +335,43 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
       {!showControls && (
         <>
           <TouchableOpacity
-            style={styles.leftTapZone}
+            style={[styles.leftTapZone, styles.pageTurnZone]}
             onPress={goToPreviousPage}
             activeOpacity={0.3}
           />
           <TouchableOpacity
-            style={styles.rightTapZone}
+            style={[styles.rightTapZone, styles.pageTurnZone]}
             onPress={goToNextPage}
             activeOpacity={0.3}
           />
         </>
       )}
 
+      {progressSaveError ? (
+        <SafeAreaView style={[styles.progressErrorBanner, readerChromeOverlay]} edges={['top']}>
+          <Text variant="bodySmall" style={styles.progressErrorText}>
+            {progressSaveError}
+          </Text>
+        </SafeAreaView>
+      ) : null}
+
       {showControls && (
         <>
-          <View style={styles.topBar}>
+          <SafeAreaView style={[styles.topBar, readerChromeOverlay]} edges={['top']}>
             <IconButton
               icon="arrow-left"
               iconColor="#fff"
               size={24}
-              onPress={() => {
-                saveProgress();
-                navigation.goBack();
-              }}
+              onPress={handleExit}
+              accessibilityLabel="Go back"
             />
             <Text style={styles.topBarTitle} numberOfLines={1}>
               {chapterInfo?.title || 'Reading'}
             </Text>
             <View style={{ width: 48 }} />
-          </View>
+          </SafeAreaView>
 
-          <View style={styles.bottomBar}>
+          <SafeAreaView style={[styles.bottomBar, readerChromeOverlay]} edges={['bottom']}>
             <ProgressBar
               progress={totalPages > 0 ? (currentPage + 1) / totalPages : 0}
               color="#1976D2"
@@ -366,7 +396,7 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
                 disabled={currentPage >= totalPages - 1}
               />
             </View>
-          </View>
+          </SafeAreaView>
         </>
       )}
     </View>
@@ -436,6 +466,22 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: SCREEN_WIDTH * 0.3,
   },
+  pageTurnZone: {
+    zIndex: 5,
+  },
+  progressErrorBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(180, 40, 40, 0.92)',
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  progressErrorText: {
+    color: '#fff',
+    textAlign: 'center',
+  },
   topBar: {
     position: 'absolute',
     top: 0,
@@ -444,7 +490,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingTop: Platform.OS === 'ios' ? 50 : 10,
     paddingBottom: 10,
     paddingHorizontal: 8,
   },
@@ -460,7 +505,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingBottom: Platform.OS === 'ios' ? 30 : 10,
     paddingTop: 10,
     paddingHorizontal: 16,
   },

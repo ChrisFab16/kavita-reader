@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-16
 
-**Status**: Phase 1 implemented — manual QA in progress (scroll fix T020 pending re-test)
+**Status**: Library load scope signed off — 2026-06-16. Deferred: SeriesDetail/search (see tasks.md).
 
 **Input**: User reports loading a real library is slow on the emulator. Request comprehensive code review for correctness and performance bottlenecks using Spec Kit.
 

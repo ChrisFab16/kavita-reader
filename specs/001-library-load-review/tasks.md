@@ -24,22 +24,23 @@
 - [x] T024 Re-test scroll on emulator after reload; update `validation-results.md`
 - [x] T025 Replace `numColumns` grid with explicit row model + accurate `getRowLayout`
 - [x] T026 Fixed cover frame, reserved subtitle/progress slots, `Image.prefetch` for visible + ahead rows
-- [ ] T027 Re-test scroll while covers load from server; confirm no jump
+- [x] T027 Re-test scroll while covers load from server; confirm no jump
+- [x] T028 Scroll regression fix: stable load effect, onViewableItemsChanged ref, header setOptions without refreshing dep
 
 ## Phase 2 — Scalability (P2)
 
-- [ ] T009 Add FlatList pagination (`onEndReached`) for libraries > page size
-- [ ] T011 Replace `SeriesDetailScreen` `ScrollView` chapter list with `FlatList`
-- [ ] T012 Navigate to reader immediately; run `cacheChapter` in background
+- [x] T009 Add FlatList pagination (`onEndReached`) for libraries > page size — see [007](../007-library-browse-stability/tasks.md)
+
+## Phase 4 — Analyze & sign-off (library load scope)
+
+- [x] T017 Complete quickstart on emulator + real server; record in [validation-results.md](./validation-results.md)
+- [x] T018 `/speckit-analyze` — spec/plan/tasks consistency (library load scope signed off 2026-06-16)
+- [x] T019 Manual quickstart sign-off (pull-to-refresh + scroll + pagination via 007)
+
+## Deferred (not library grid load)
+
+- [x] T011 Replace `SeriesDetailScreen` `ScrollView` chapter list with `FlatList` — see [009](../009-series-detail-load/spec.md)
+- [x] T012 Navigate to reader immediately; run `cacheChapter` in background — see 009
 - [ ] T013 Gate `searchSeriesAcrossServers` on fixed list API (or add server-side search endpoint)
-
-## Phase 3 — Polish (P3)
-
 - [ ] T014 Extend `SeriesDto` in `types/kavita.ts` with list count fields
 - [ ] T016 Optional: expo-image `cachePolicy` / placeholder for covers
-
-## Phase 4 — Analyze & sign-off
-
-- [ ] T017 Complete quickstart on emulator + real server; record in [validation-results.md](./validation-results.md)
-- [ ] T018 `/speckit-analyze` — spec/plan/tasks consistency
-- [ ] T019 Manual quickstart sign-off (pull-to-refresh + scroll re-test)

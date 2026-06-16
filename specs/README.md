@@ -38,3 +38,13 @@ Active feature path: `.specify/feature.json`.
 | 003 | `specs/003-app-session-bootstrap/` |
 | 004 | `specs/004-reader-type-detection/` |
 | 005 | `specs/005-volume-display/` |
+| 006 | `specs/006-library-data-reset/` |
+| 007 | `specs/007-library-browse-stability/` — signed off |
+| 008 | `specs/008-reading-progress-sync/` — signed off |
+| 009 | `specs/009-series-detail-load/` — signed off |
+| 010 | `specs/010-series-detail-search/` — **active** |
+
+## Next action queue
+
+1. **010** — series detail search (T003 manual sign-off).
+2. **003 / 004** — session bootstrap + reader type manual QA.

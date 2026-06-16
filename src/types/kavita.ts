@@ -76,6 +76,31 @@ export interface CollectionTagDto {
   promoted?: boolean;
 }
 
+/** Kavita `API.DTOs.Progress.ProgressDto` — reading position for a chapter. */
+export interface ProgressDto {
+  volumeId: number;
+  chapterId: number;
+  pageNum: number;
+  seriesId: number;
+  libraryId: number;
+  bookScrollId?: string | null;
+  lastModifiedUtc?: string;
+}
+
+/** Kavita `API.DTOs.Reader.ChapterInfoDto` — subset used by the reader. */
+export interface ChapterInfoDto {
+  chapterNumber: string;
+  volumeNumber: string;
+  volumeId: number;
+  seriesName: string;
+  seriesId: number;
+  libraryId: number;
+  title: string;
+  pages: number;
+  fileName?: string | null;
+  seriesFormat: MangaFormat;
+}
+
 export enum MangaFormat {
   Unknown = 0,
   Archive = 1,

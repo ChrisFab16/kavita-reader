@@ -2,7 +2,7 @@
 
 **Created**: 2026-06-16
 
-**Status**: Implemented — validation pending
+**Status**: Signed off — 2026-06-16 (see validation-results.md)
 
 **Input**: After comics move off a Kavita library/selection, pull-to-refresh keeps stale grid entries; user needs a full reset from Settings.
 
@@ -25,7 +25,7 @@ As a user who reorganized comics on Kavita, I can reset cached library display f
 - **FR-003**: Reset MUST clear in-memory library/series lists and show loading state before fetching fresh data.
 - **FR-004**: After reset, navigation MUST return to `Home` so library detail screens remount clean.
 - **FR-006**: Series list MUST use Kavita `all-v2` with `libraryId` query param and FilterV2 library statement.
-- **FR-007**: Refresh and reset MUST fetch all pages for the active library or collection.
+- **FR-007**: Refresh and reset MUST reload page 0 from the server with `noCache`; subsequent pages load via infinite scroll ([007](../007-library-browse-stability/spec.md) FR-005). `getAllSeriesInLibrary` remains for callers that need a full in-memory fetch.
 - **FR-008**: Home MUST list Kavita collection tags; collection grid MUST use `series-by-collection`.
 
 ## Constitution Check

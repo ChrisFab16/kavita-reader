@@ -21,6 +21,8 @@
 | **implement** | Code matches tasks; tasks marked `[x]` as completed |
 | **validate** | `quickstart.md` run; results in `validation-results.md` when manual QA applies |
 
+**Kavita API:** canonical contracts in `specs/contracts/` — update alongside `src/api/kavitaClient.ts` / `kavitaFilterV2.ts`.
+
 ## Before editing `src/` or `App.tsx`
 
 1. Read `.specify/feature.json` — know the active feature directory.
@@ -41,6 +43,10 @@ If code landed without specs (e.g. hotfix), **backfill** `spec.md`, `plan.md`, `
 
 | ID | Scope | Status |
 |----|-------|--------|
-| 001 | Library load perf + scroll stability | Phase 1b — validation pending |
+| 001 | Library load perf + scroll stability | **Signed off** — T011–T016 deferred |
 | 002 | Auth login + logout credential cleanup | Signed off |
 | 003 | App session bootstrap (skip Connect on restart) | Implemented — validation pending |
+| 006 | Library reset, refresh, collections, scoping | **Signed off** |
+| 007 | Library browse pagination, loading, scoping | **Signed off** |
+| 008 | Reading progress sync to Kavita | **Active** — save currently failing |
+| 009 | Series detail load (FlatList, progressive) | **Signed off** |

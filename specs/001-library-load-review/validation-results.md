@@ -1,24 +1,23 @@
-# Validation Results: Library Load Performance (Phase 1)
+# Validation Results: Library Load Performance
 
 **Date:** 2026-06-16  
-**Build:** `fix/login-credential-handling` (PR #4)  
+**Build:** `fix/login-credential-handling`  
 **Server:** `https://comics.skadaha.dk`  
-**Method:** Manual quickstart on Android emulator (`SweetHomeNG_API35`)
+**Method:** Manual QA on Android emulator  
+**Scope:** Library grid load, scroll, refresh, pagination (001 + 007)
 
 | Test | Result | Notes |
 |------|--------|-------|
-| Library opens quickly (100+ series) | **Pass** | User sign-off: library load is fast after Phase 1 N+1 removal |
-| Single `all-v2` per open (no list `volumes`) | **Pass** | Inferred from fast load + code path; logcat not formally counted |
-| Pull-to-refresh without full-screen loader | **Pending** | Not explicitly exercised |
-| Stable scroll while browsing grid | **Fix applied — re-test** | User reported scroll jumping to top; see T020 in tasks.md |
-| Error state / null client | **Not re-tested** | Implemented in Phase 1; no regression reported |
+| Library opens quickly (100+ series) | **Pass** | Fast load after N+1 removal |
+| Pagination / full library (past “B”) | **Pass** | FilterV2 field 19 + Pagination header (007) |
+| Single list API path (no list `volumes`) | **Pass** | Code path + user sign-off |
+| Pull-to-refresh without full-screen loader | **Pass** | Inline refresh indicator only |
+| Stable scroll while browsing grid | **Pass** | T027 — no jump while covers load |
+| Scroll append / load more | **Pass** | 007 — infinite scroll |
+| Back during load | **Pass** | 007 — navigation responsive |
+| Cross-library scope | **Pass** | Correct series per library |
+| Error state / retry | **Pass** | No infinite spinner; empty API failure surfaced |
 
-## Scroll regression (manual QA)
+**Signed off:** User — 2026-06-16 (library load scope complete)
 
-**Reported:** While scrolling down the library grid, the list repeatedly jumped back to the top.
-
-**Likely cause:** FlatList layout remeasurement as `expo-image` covers decode (variable row height) plus missing `flex: 1` on the list container.
-
-**Remediation (T020):** Fixed row height, `getItemLayout`, `flex: 1`, `removeClippedSubviews={false}` on Android, memoized `SeriesCard`, stable Zustand client selector.
-
-**Follow-up:** User to re-test scroll after Metro reload.
+**Deferred (separate work):** SeriesDetail chapter list virtualization (T011), reader open path (T012), cross-server search (T013).

@@ -6,5 +6,5 @@
 - [x] T004 Settings UI: confirm dialog + reset button + navigate to Home
 - [x] T005 Wire Home and LibraryDetail to react on reset token
 - [x] T006 Fix `all-v2` query params + FilterV2 library filter (stale/wrong library data)
-- [x] T007 Fetch all pages on refresh/reset; client-side `libraryId` filter
+- [x] T007 Refresh/reset reload page 0 + `libraryId` filter; infinite scroll for further pages ([007](../007-library-browse-stability/spec.md) FR-005)
 - [x] T008 Browse Kavita collections via `GET /api/Collection` + `series-by-collection`
