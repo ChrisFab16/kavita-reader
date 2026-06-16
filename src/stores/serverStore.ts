@@ -51,7 +51,15 @@ export const useServerStore = create<ServerState>()(
       },
 
       removeServer: (id) => {
-        // Clear client from cache
+        const server = get().servers.find((s) => s.id === id);
+        const cachedClient = clientCache.get(id);
+
+        if (cachedClient) {
+          void cachedClient.logout();
+        } else if (server) {
+          void KavitaClient.clearStoredCredentials(server.url);
+        }
+
         clientCache.delete(id);
         
         set((state) => {
