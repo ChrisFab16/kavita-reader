@@ -1,5 +1,7 @@
 # Spec Kit Features
 
+> **Upstream vs fork:** We contribute `specs/contracts/` + app code to [cbytestech/kavita-reader](https://github.com/cbytestech/kavita-reader); the full Spec Kit tree lives on branch **`speckit-work`**. See **[docs/upstream-contribution.md](../docs/upstream-contribution.md)**.
+
 Feature specifications live in numbered directories: `specs/001-<short-name>/`, `specs/002-<short-name>/`, …
 
 ## Required workflow for ALL code changes

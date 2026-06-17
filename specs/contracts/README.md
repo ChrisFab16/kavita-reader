@@ -2,6 +2,8 @@
 
 **Purpose:** Single source of truth for client ↔ Kavita server integration. Read these **before** changing `src/api/kavitaClient.ts`, filter bodies, or library browse pagination.
 
+**Upstream:** This folder is the **only** `specs/` content contributed to [cbytestech/kavita-reader](https://github.com/cbytestech/kavita-reader). Feature specs (`specs/001`–`010`) stay on fork branch `speckit-work` — see [docs/upstream-contribution.md](../../docs/upstream-contribution.md).
+
 **Upstream reference:** [Kareadita/Kavita](https://github.com/Kareadita/Kavita) — verify enums against `API/DTOs/Filtering/` when upgrading Kavita versions.
 
 **Documentation lookup:** Use **Context7 MCP** (`user-context7`) before guessing API shapes. See [AGENTS.md](../../AGENTS.md#context7-kavita-documentation-lookup) for workflow and Kavita library IDs. Context7 informs contracts; this folder is the **client source of truth** after distillation.
@@ -49,9 +51,9 @@ Use this checklist when library browse breaks:
 - After a production bug — add a row to **Known pitfalls** above
 - After Context7 or upstream OpenAPI lookup resolves a new field/requirement — capture it here (do not rely on MCP alone)
 
-## Feature spec cross-links
+## Feature spec cross-links (fork `speckit-work` only)
 
-Feature specs may duplicate summaries but MUST link here for full detail:
+On branch **`speckit-work`**, numbered feature specs duplicate summaries but MUST link here for full detail:
 
 - `specs/001-library-load-review/` — library perf / scroll
 - `specs/006-library-data-reset/` — reset / refresh

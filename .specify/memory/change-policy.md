@@ -39,6 +39,12 @@
 
 If code landed without specs (e.g. hotfix), **backfill** `spec.md`, `plan.md`, `tasks.md` immediately and mark tasks `[x]` to match reality before the next PR or commit.
 
+## Upstream contributions
+
+Fork PRs to **cbytestech/kavita-reader** ship **`specs/contracts/`** only (not `.specify/`, `.cursor/speckit-*`, or `specs/00N/`). Full Spec Kit stays on **`speckit-work`**.
+
+See **[docs/upstream-contribution.md](../docs/upstream-contribution.md)** and **[upstream-contribution-policy.md](./upstream-contribution-policy.md)**.
+
 ## Active features (this branch)
 
 | ID | Scope | Status |

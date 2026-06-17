@@ -1,6 +1,17 @@
 # KavitaReader — Agent Instructions
 
-## Spec Kit methodology (NON-NEGOTIABLE)
+## Fork vs upstream branches
+
+| Branch | Documentation |
+|--------|----------------|
+| **`speckit-work`** (this branch) | Full Spec Kit — `.specify/`, `specs/001`–`010`, skills |
+| **Upstream PR branches** | `specs/contracts/` + slim `AGENTS.md` only |
+
+Policy: **[docs/upstream-contribution.md](./docs/upstream-contribution.md)** · Agent summary: `.specify/memory/upstream-contribution-policy.md`
+
+---
+
+## Spec Kit methodology (NON-NEGOTIABLE on `speckit-work`)
 
 **Every code change** in this repo MUST follow the Spec Kit workflow and be traceable to `specs/<NNN>-<name>/`. See `.specify/memory/change-policy.md`.
 
