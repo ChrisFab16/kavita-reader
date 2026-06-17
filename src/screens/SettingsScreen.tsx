@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Card, Switch, Button, IconButton, Divider, List, Chip } from 'react-native-paper';
 import { useServerStore } from '../stores/serverStore';
 import { useThemeStore } from '../stores/themeStore';
+import { useLibraryDisplayStore } from '../stores/libraryDisplayStore';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
@@ -25,6 +26,28 @@ export default function SettingsScreen({ navigation }: Props) {
   const theme = useThemeStore((state) => state.theme);
 
   const [expandedServers, setExpandedServers] = useState(false);
+  const requestFullReload = useLibraryDisplayStore((state) => state.requestFullReload);
+  const isResettingLibrary = useLibraryDisplayStore((state) => state.isResetting);
+
+  const handleResetLibraryData = () => {
+    Alert.alert(
+      'Reset & reload libraries',
+      'Clears cached covers and reloads library data from your Kavita server. Use this after moving or removing comics from a library.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset & reload',
+          onPress: async () => {
+            await requestFullReload();
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Home' }],
+            });
+          },
+        },
+      ]
+    );
+  };
 
   const handleRemoveServer = (serverId: string, serverName: string) => {
     Alert.alert(
@@ -151,6 +174,29 @@ export default function SettingsScreen({ navigation }: Props) {
                 color={theme.primary}
               />
             </View>
+          </Card.Content>
+        </Card>
+
+        {/* Library data */}
+        <Card style={[styles.card, { backgroundColor: theme.surface }]}>
+          <Card.Content>
+            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.text }]}>
+              Library data
+            </Text>
+            <Text variant="bodySmall" style={[styles.settingDescription, { color: theme.textSecondary }]}>
+              Clears cached covers and reloads from the server. Use after comics move off a library or selection changes on Kavita.
+            </Text>
+            <Button
+              mode="outlined"
+              onPress={handleResetLibraryData}
+              icon="refresh"
+              loading={isResettingLibrary}
+              disabled={isResettingLibrary}
+              style={styles.resetLibraryButton}
+              textColor={theme.primary}
+            >
+              Reset & reload libraries
+            </Button>
           </Card.Content>
         </Card>
 
@@ -315,6 +361,12 @@ const styles = StyleSheet.create({
   settingInfo: {
     flex: 1,
     gap: 4,
+  },
+  settingDescription: {
+    marginBottom: 12,
+  },
+  resetLibraryButton: {
+    alignSelf: 'flex-start',
   },
   divider: {
     marginVertical: 12,

@@ -1,11 +1,14 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Text, Card, ActivityIndicator, Searchbar, IconButton } from 'react-native-paper';
 import { useServerStore } from '../stores/serverStore';
 import { useThemeStore } from '../stores/themeStore';
 import { createScreenLogger } from '../utils/debugLogger';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import ScreenHeaderActions from '../components/ScreenHeaderActions';
+import { useLibraryReloadOnFocus } from '../hooks/useLibraryReloadOnFocus';
+import type { CollectionTagDto } from '../types/kavita';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -25,6 +28,10 @@ export default function HomeScreen({ navigation }: Props) {
     logger.state('Initializing loading', true);
     return true;
   });
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [collections, setCollections] = useState<CollectionTagDto[]>([]);
   
   const [searchQuery, setSearchQuery] = useState<string>(() => {
     logger.state('Initializing searchQuery', '');
@@ -51,56 +58,82 @@ export default function HomeScreen({ navigation }: Props) {
   });
   logger.store('themeStore', `Theme retrieved: ${theme ? Object.keys(theme).length + ' keys' : 'null'}`);
 
-  useEffect(() => {
-    logger.effect('Mount effect triggered');
-    lastRenderReason.current = 'mount-effect';
-    loadLibraries();
-    
-    return () => {
-      logger.effect('Component unmounting');
-    };
-  }, []);
-  
-  useEffect(() => {
-    logger.effect(`Libraries changed: ${libraries.length} items`);
-  }, [libraries]);
-  
-  useEffect(() => {
-    logger.effect(`Loading state changed: ${loading}`);
-  }, [loading]);
-
-  const loadLibraries = async () => {
+  const loadLibraries = useCallback(async (options?: { refresh?: boolean; reset?: boolean }) => {
     logger.function('loadLibraries', 'Called');
-    
+
     if (!client) {
       logger.error('No client available');
       return;
     }
-    
-    logger.function('loadLibraries', 'Setting loading=true');
-    setLoading(true);
-    lastRenderReason.current = 'loading-started';
-    
+
+    const isReset = options?.reset === true;
+    const isRefresh = options?.refresh === true;
+    if (isReset) {
+      setLibraries([]);
+      setCollections([]);
+      setSearchQuery('');
+      setLoading(true);
+      lastRenderReason.current = 'reset-started';
+    } else if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      logger.function('loadLibraries', 'Setting loading=true');
+      setLoading(true);
+      lastRenderReason.current = 'loading-started';
+    }
+
     try {
       logger.function('loadLibraries', 'Calling client.getLibraries()');
-      const libs = await client.getLibraries();
-      logger.success(`Libraries received: ${libs.length}`);
-      
-      logger.function('loadLibraries', 'Updating state with libraries');
+      const [libs, colls] = await Promise.all([
+        client.getLibraries(),
+        client.getCollections().catch(() => [] as CollectionTagDto[]),
+      ]);
+      logger.success(`Libraries received: ${libs.length}, collections: ${colls.length}`);
       setLibraries(libs);
+      setCollections(colls);
       lastRenderReason.current = 'libraries-loaded';
-      
     } catch (error: any) {
       logger.error('Failed to load libraries', error.message);
       lastRenderReason.current = 'error';
     } finally {
-      logger.function('loadLibraries', 'Setting loading=false');
       setLoading(false);
+      setRefreshing(false);
       lastRenderReason.current = 'loading-complete';
       logger.function('loadLibraries', 'Complete');
       logger.separator();
     }
-  };
+  }, [client]);
+
+  useEffect(() => {
+    logger.effect('Mount effect triggered');
+    lastRenderReason.current = 'mount-effect';
+    loadLibraries();
+    return () => {
+      logger.effect('Component unmounting');
+    };
+  }, [loadLibraries]);
+
+  const handleRefresh = useCallback(() => {
+    loadLibraries({ refresh: true });
+  }, [loadLibraries]);
+
+  const handleFullReset = useCallback(() => {
+    loadLibraries({ reset: true });
+  }, [loadLibraries]);
+
+  useLibraryReloadOnFocus(handleFullReset);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <ScreenHeaderActions
+          navigation={navigation}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+        />
+      ),
+    });
+  }, [navigation, handleRefresh, refreshing]);
 
   const getLibraryIcon = (type: number) => {
     switch (type) {
@@ -135,6 +168,14 @@ export default function HomeScreen({ navigation }: Props) {
   }
 
   logger.render_phase(`Rendering MAIN content (${libraries.length} libraries)`);
+
+  const searchLower = searchQuery.trim().toLowerCase();
+  const filteredLibraries = searchLower
+    ? libraries.filter((library) => library.name?.toLowerCase().includes(searchLower))
+    : libraries;
+  const filteredCollections = searchLower
+    ? collections.filter((collection) => collection.title?.toLowerCase().includes(searchLower))
+    : collections;
   
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -152,24 +193,38 @@ export default function HomeScreen({ navigation }: Props) {
         inputStyle={{ color: theme.text }}
       />
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+          />
+        }
+      >
         <View style={styles.section}>
           <Text variant="titleLarge" style={[styles.sectionTitle, { color: theme.text }]}>
             Libraries
           </Text>
           
-          {libraries.length === 0 ? (
+          {filteredLibraries.length === 0 ? (
             <Card style={[styles.emptyCard, { backgroundColor: theme.surface }]}>
               <Card.Content>
-                <Text variant="titleMedium" style={{ color: theme.text }}>No libraries found</Text>
+                <Text variant="titleMedium" style={{ color: theme.text }}>
+                  {libraries.length === 0 ? 'No libraries found' : 'No matching libraries'}
+                </Text>
                 <Text variant="bodyMedium" style={[styles.emptyText, { color: theme.textSecondary }]}>
-                  Add some libraries to your Kavita server to get started!
+                  {libraries.length === 0
+                    ? 'Add some libraries to your Kavita server to get started!'
+                    : 'Try a different search term.'}
                 </Text>
               </Card.Content>
             </Card>
           ) : (
             <View style={styles.librariesGrid}>
-              {libraries.map((library, idx) => {
+              {filteredLibraries.map((library, idx) => {
                 if (logger.getRenderCount() <= 5) {
                   logger.render_phase(`Creating library card #${idx}: ${library.name}`);
                 }
@@ -204,6 +259,60 @@ export default function HomeScreen({ navigation }: Props) {
                   </TouchableOpacity>
                 );
               })}
+            </View>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Text variant="titleLarge" style={[styles.sectionTitle, { color: theme.text }]}>
+            Collections
+          </Text>
+
+          {filteredCollections.length === 0 ? (
+            <Card style={[styles.emptyCard, { backgroundColor: theme.surface }]}>
+              <Card.Content>
+                <Text variant="titleMedium" style={{ color: theme.text }}>
+                  {collections.length === 0 ? 'No collections found' : 'No matching collections'}
+                </Text>
+                <Text variant="bodyMedium" style={[styles.emptyText, { color: theme.textSecondary }]}>
+                  {collections.length === 0
+                    ? 'Create collections in Kavita to group series here.'
+                    : 'Try a different search term.'}
+                </Text>
+              </Card.Content>
+            </Card>
+          ) : (
+            <View style={styles.librariesGrid}>
+              {filteredCollections.map((collection) => (
+                <TouchableOpacity
+                  key={collection.id}
+                  style={styles.libraryCard}
+                  onPress={() => {
+                    logger.user('Collection clicked', collection.title);
+                    navigation.navigate('LibraryDetail', {
+                      collectionId: collection.id,
+                      libraryName: `${collection.title} (collection)`,
+                    });
+                  }}
+                >
+                  <Card style={[styles.card, { backgroundColor: theme.surface }]}>
+                    <Card.Content style={styles.cardContent}>
+                      <IconButton
+                        icon="folder-multiple"
+                        size={48}
+                        iconColor={theme.primary}
+                        style={styles.libraryIconButton}
+                      />
+                      <Text variant="titleMedium" style={[styles.libraryName, { color: theme.text }]} numberOfLines={2}>
+                        {collection.title}
+                      </Text>
+                      <Text variant="bodySmall" style={[styles.libraryType, { color: theme.textSecondary }]}>
+                        Collection tag
+                      </Text>
+                    </Card.Content>
+                  </Card>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
         </View>

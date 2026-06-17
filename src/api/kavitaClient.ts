@@ -1,7 +1,8 @@
 // src/api/kavitaClient.ts
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { PaginatedSeriesResult, SeriesDto, UserDto } from '../types/kavita';
+import { PaginatedSeriesResult, SeriesDto, UserDto, CollectionTagDto } from '../types/kavita';
+import { filterSeriesForLibrary, hasCrossLibrarySeries } from '../utils/seriesLibraryFilter';
 
 const PUBLIC_API_PATHS = new Set([
   '/api/health',
@@ -70,6 +71,12 @@ export class KavitaClient {
       keys.refreshTokenKey,
       keys.apiKeyKey,
     ]);
+  }
+
+  static async hasStoredCredentials(baseUrl: string): Promise<boolean> {
+    const keys = storageKeysForBaseUrl(baseUrl);
+    const token = await AsyncStorage.getItem(keys.tokenKey);
+    return !!token;
   }
 
   private async loadStoredCredentials(): Promise<void> {
@@ -252,53 +259,236 @@ export class KavitaClient {
     }
   }
 
+  async getCollections(): Promise<CollectionTagDto[]> {
+    try {
+      const response = await this.client.get('/api/Collection');
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  private parseSeriesListResponse(data: unknown): PaginatedSeriesResult {
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      const obj = data as Record<string, unknown>;
+      const pagination = (obj.pagination as PaginatedSeriesResult['pagination']) ?? null;
+
+      for (const key of ['result', 'items', 'series'] as const) {
+        const candidate = obj[key];
+        if (Array.isArray(candidate)) {
+          return { result: candidate as SeriesDto[], pagination };
+        }
+      }
+    }
+
+    if (Array.isArray(data)) {
+      return { result: data as SeriesDto[], pagination: null };
+    }
+
+    console.warn('Unexpected series list response structure:', data);
+    return { result: [], pagination: null };
+  }
+
+  private noCacheHeaders(noCache?: boolean) {
+    return noCache
+      ? { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
+      : undefined;
+  }
+
+  private libraryFilterBody(libraryId: number) {
+    return {
+      statements: [
+        {
+          field: 0,
+          comparison: 0,
+          value: String(libraryId),
+        },
+      ],
+      combination: 0,
+    };
+  }
+
+  private scopeSeriesToLibrary(series: SeriesDto[], libraryId: number): SeriesDto[] {
+    return filterSeriesForLibrary(series, libraryId);
+  }
+
   async getSeriesList(
     libraryId: number,
     pageNumber: number = 0,
-    pageSize: number = 50
+    pageSize: number = 50,
+    options?: { noCache?: boolean }
   ): Promise<PaginatedSeriesResult> {
-    try {
-      const response = await this.client.post('/api/Series/all-v2', {
-        libraryId,
-        pageNumber,
-        pageSize,
-      });
+    const headers = this.noCacheHeaders(options?.noCache);
+    const queryParams = {
+      libraryId,
+      PageNumber: pageNumber,
+      PageSize: pageSize,
+      context: 1,
+    };
 
-      const data = response.data;
-      let result: SeriesDto[] = [];
-      let pagination: PaginatedSeriesResult['pagination'] = null;
-
-      if (data?.result && Array.isArray(data.result)) {
-        result = data.result;
-        pagination = data.pagination ?? null;
-      } else if (Array.isArray(data)) {
-        result = data;
-      } else {
-        console.warn('Unexpected all-v2 response structure:', data);
-      }
-
-      return { result, pagination };
-    } catch (error) {
-      console.error('all-v2 failed, trying alternative endpoint');
-      try {
+    const attempts: Array<() => Promise<PaginatedSeriesResult>> = [
+      async () => {
+        const response = await this.client.post('/api/Series/all-v2', this.libraryFilterBody(libraryId), {
+          params: queryParams,
+          headers,
+        });
+        return this.parseSeriesListResponse(response.data);
+      },
+      async () => {
+        const response = await this.client.post('/api/Series/all-v2', {}, {
+          params: queryParams,
+          headers,
+        });
+        return this.parseSeriesListResponse(response.data);
+      },
+      async () => {
+        const response = await this.client.post(
+          '/api/Series/all-v2',
+          { libraryId, pageNumber, pageSize },
+          { params: { libraryId, PageNumber: pageNumber, PageSize: pageSize }, headers }
+        );
+        return this.parseSeriesListResponse(response.data);
+      },
+      async () => {
         const response = await this.client.get('/api/Series/series', {
           params: { libraryId, pageNumber, pageSize },
+          headers,
         });
         const items = Array.isArray(response.data) ? response.data : [];
         return { result: items, pagination: null };
-      } catch {
-        throw this.handleError(error);
+      },
+    ];
+
+    let lastUnscoped: PaginatedSeriesResult | null = null;
+
+    for (const attempt of attempts) {
+      try {
+        const parsed = await attempt();
+        const scoped = this.scopeSeriesToLibrary(parsed.result, libraryId);
+
+        if (scoped.length > 0) {
+          return { result: scoped, pagination: parsed.pagination };
+        }
+
+        if (parsed.result.length > 0) {
+          if (hasCrossLibrarySeries(parsed.result, libraryId)) {
+            continue;
+          }
+          lastUnscoped = parsed;
+        }
+      } catch (error) {
+        console.error('getSeriesList attempt failed:', error);
       }
     }
+
+    if (lastUnscoped) {
+      return lastUnscoped;
+    }
+
+    return { result: [], pagination: null };
+  }
+
+  async getAllSeriesInLibrary(
+    libraryId: number,
+    options?: { noCache?: boolean; pageSize?: number }
+  ): Promise<SeriesDto[]> {
+    const pageSize = options?.pageSize ?? 100;
+    const collected: SeriesDto[] = [];
+    let page = 0;
+
+    while (true) {
+      const { result, pagination } = await this.getSeriesList(libraryId, page, pageSize, options);
+      collected.push(...result);
+
+      const totalPages = pagination?.totalPages;
+      if (totalPages != null && page + 1 >= totalPages) {
+        break;
+      }
+      if (result.length === 0 || result.length < pageSize) {
+        break;
+      }
+      page += 1;
+      if (page > 200) {
+        break;
+      }
+    }
+
+    return collected;
+  }
+
+  async getSeriesByCollectionList(
+    collectionId: number,
+    pageNumber: number = 0,
+    pageSize: number = 100,
+    options?: { noCache?: boolean }
+  ): Promise<PaginatedSeriesResult> {
+    try {
+      const response = await this.client.get('/api/Series/series-by-collection', {
+        params: {
+          collectionId,
+          PageNumber: pageNumber,
+          PageSize: pageSize,
+        },
+        headers: this.noCacheHeaders(options?.noCache),
+      });
+      return this.parseSeriesListResponse(response.data);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async getAllSeriesByCollection(
+    collectionId: number,
+    options?: { noCache?: boolean; pageSize?: number }
+  ): Promise<SeriesDto[]> {
+    const pageSize = options?.pageSize ?? 100;
+    const collected: SeriesDto[] = [];
+    let page = 0;
+
+    while (true) {
+      const { result, pagination } = await this.getSeriesByCollectionList(
+        collectionId,
+        page,
+        pageSize,
+        options
+      );
+      collected.push(...result);
+
+      const totalPages = pagination?.totalPages;
+      if (totalPages != null && page + 1 >= totalPages) {
+        break;
+      }
+      if (result.length === 0 || result.length < pageSize) {
+        break;
+      }
+      page += 1;
+      if (page > 200) {
+        break;
+      }
+    }
+
+    return collected;
   }
 
   /** Returns series for a library page without per-item volume fetches. */
   async getSeries(
     libraryId: number,
     pageNumber: number = 0,
-    pageSize: number = 50
+    pageSize: number = 50,
+    options?: { noCache?: boolean }
   ): Promise<SeriesDto[]> {
-    const { result } = await this.getSeriesList(libraryId, pageNumber, pageSize);
+    const { result } = await this.getSeriesList(libraryId, pageNumber, pageSize, options);
+    return this.scopeSeriesToLibrary(result, libraryId);
+  }
+
+  /** Returns one page of series for a Kavita collection tag. */
+  async getSeriesByCollection(
+    collectionId: number,
+    pageNumber: number = 0,
+    pageSize: number = 100,
+    options?: { noCache?: boolean }
+  ): Promise<SeriesDto[]> {
+    const { result } = await this.getSeriesByCollectionList(collectionId, pageNumber, pageSize, options);
     return result;
   }
 
