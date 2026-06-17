@@ -1,7 +1,35 @@
 // src/api/kavitaClient.ts
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { UserDto } from '../types/kavita';
+import { PaginatedSeriesResult, SeriesDto, UserDto } from '../types/kavita';
+
+const PUBLIC_API_PATHS = new Set([
+  '/api/health',
+  '/api/account/login',
+  '/api/account/refresh-token',
+  '/api/account/register',
+]);
+
+function normalizeApiPath(url?: string): string {
+  if (!url) return '';
+  const withoutQuery = url.split('?')[0];
+  const pathOnly = withoutQuery.replace(/^https?:\/\/[^/]+/i, '');
+  return pathOnly.toLowerCase();
+}
+
+function isPublicApiRoute(url?: string): boolean {
+  return PUBLIC_API_PATHS.has(normalizeApiPath(url));
+}
+
+function storageKeysForBaseUrl(baseUrl: string) {
+  const normalized = baseUrl.replace(/\/$/, '');
+  const urlKey = normalized.replace(/[^a-zA-Z0-9]/g, '_');
+  return {
+    tokenKey: `kavita_token_${urlKey}`,
+    refreshTokenKey: `kavita_refresh_${urlKey}`,
+    apiKeyKey: `kavita_apikey_${urlKey}`,
+  };
+}
 
 export class KavitaClient {
   private client: AxiosInstance;
@@ -10,19 +38,18 @@ export class KavitaClient {
   private refreshToken: string | null = null;
   private apiKey: string | null = null;
 
-  // Per-server storage keys so multiple servers don't overwrite each other
   private tokenKey: string;
   private refreshTokenKey: string;
   private apiKeyKey: string;
+  private credentialsLoadPromise: Promise<void>;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
 
-    // Derive stable storage keys from the URL
-    const urlKey = this.baseUrl.replace(/[^a-zA-Z0-9]/g, '_');
-    this.tokenKey = `kavita_token_${urlKey}`;
-    this.refreshTokenKey = `kavita_refresh_${urlKey}`;
-    this.apiKeyKey = `kavita_apikey_${urlKey}`;
+    const keys = storageKeysForBaseUrl(this.baseUrl);
+    this.tokenKey = keys.tokenKey;
+    this.refreshTokenKey = keys.refreshTokenKey;
+    this.apiKeyKey = keys.apiKeyKey;
 
     this.client = axios.create({
       baseURL: this.baseUrl,
@@ -32,8 +59,17 @@ export class KavitaClient {
       },
     });
 
+    this.credentialsLoadPromise = this.loadStoredCredentials();
     this.setupInterceptors();
-    this.loadStoredCredentials();
+  }
+
+  static async clearStoredCredentials(baseUrl: string): Promise<void> {
+    const keys = storageKeysForBaseUrl(baseUrl);
+    await AsyncStorage.multiRemove([
+      keys.tokenKey,
+      keys.refreshTokenKey,
+      keys.apiKeyKey,
+    ]);
   }
 
   private async loadStoredCredentials(): Promise<void> {
@@ -51,9 +87,8 @@ export class KavitaClient {
     }
   }
 
-  // Call this when you need credentials guaranteed to be loaded before proceeding
   async ensureCredentialsLoaded(): Promise<void> {
-    await this.loadStoredCredentials();
+    await this.credentialsLoadPromise;
   }
 
   async isAuthenticated(): Promise<boolean> {
@@ -63,7 +98,16 @@ export class KavitaClient {
 
   private setupInterceptors(): void {
     this.client.interceptors.request.use(
-      async (config) => {
+      async (config: InternalAxiosRequestConfig) => {
+        if (isPublicApiRoute(config.url)) {
+          if (config.headers) {
+            delete config.headers.Authorization;
+          }
+          return config;
+        }
+
+        await this.ensureCredentialsLoaded();
+
         if (!this.token) {
           this.token = await AsyncStorage.getItem(this.tokenKey);
         }
@@ -78,21 +122,28 @@ export class KavitaClient {
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        const originalRequest = error.config as any;
+        const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
 
-        if (error.response?.status === 401 && !originalRequest._retry) {
-          originalRequest._retry = true;
+        if (
+          !originalRequest ||
+          error.response?.status !== 401 ||
+          originalRequest._retry ||
+          isPublicApiRoute(originalRequest.url)
+        ) {
+          return Promise.reject(error);
+        }
 
-          try {
-            const newToken = await this.refreshAccessToken();
-            if (newToken && originalRequest.headers) {
-              originalRequest.headers.Authorization = `Bearer ${newToken}`;
-              return this.client(originalRequest);
-            }
-          } catch (refreshError) {
-            await this.clearTokens();
-            throw refreshError;
+        originalRequest._retry = true;
+
+        try {
+          const newToken = await this.refreshAccessToken();
+          if (newToken && originalRequest.headers) {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            return this.client(originalRequest);
           }
+        } catch (refreshError) {
+          await this.clearTokens();
+          throw refreshError;
         }
 
         return Promise.reject(error);
@@ -124,6 +175,8 @@ export class KavitaClient {
   }
 
   async login(username: string, password: string): Promise<UserDto> {
+    await this.clearTokens();
+
     try {
       const response = await this.client.post<UserDto>('/api/Account/login', {
         username,
@@ -187,6 +240,7 @@ export class KavitaClient {
       this.refreshTokenKey,
       this.apiKeyKey,
     ]);
+    this.credentialsLoadPromise = Promise.resolve();
   }
 
   async getLibraries(): Promise<any[]> {
@@ -198,7 +252,11 @@ export class KavitaClient {
     }
   }
 
-  async getSeries(libraryId: number, pageNumber: number = 0, pageSize: number = 50): Promise<any[]> {
+  async getSeriesList(
+    libraryId: number,
+    pageNumber: number = 0,
+    pageSize: number = 50
+  ): Promise<PaginatedSeriesResult> {
     try {
       const response = await this.client.post('/api/Series/all-v2', {
         libraryId,
@@ -206,47 +264,42 @@ export class KavitaClient {
         pageSize,
       });
 
-      let seriesList: any[] = [];
-      if (response.data.result) {
-        seriesList = response.data.result;
-      } else if (Array.isArray(response.data)) {
-        seriesList = response.data;
+      const data = response.data;
+      let result: SeriesDto[] = [];
+      let pagination: PaginatedSeriesResult['pagination'] = null;
+
+      if (data?.result && Array.isArray(data.result)) {
+        result = data.result;
+        pagination = data.pagination ?? null;
+      } else if (Array.isArray(data)) {
+        result = data;
       } else {
-        console.warn('Unexpected response structure:', response.data);
-        return [];
+        console.warn('Unexpected all-v2 response structure:', data);
       }
 
-      const enrichedSeries = await Promise.all(
-        seriesList.map(async (series) => {
-          try {
-            const volumes = await this.getVolumes(series.id);
-            const totalChapters = volumes.reduce((sum, vol) => {
-              return sum + (vol.chapters?.length || 0);
-            }, 0);
-            return {
-              ...series,
-              volumeCount: volumes.length,
-              chapterCount: totalChapters,
-            };
-          } catch (error) {
-            console.warn(`Failed to get volumes for series ${series.id}:`, error);
-            return series;
-          }
-        })
-      );
-
-      return enrichedSeries;
+      return { result, pagination };
     } catch (error) {
       console.error('all-v2 failed, trying alternative endpoint');
       try {
         const response = await this.client.get('/api/Series/series', {
-          params: { libraryId, pageNumber, pageSize }
+          params: { libraryId, pageNumber, pageSize },
         });
-        return response.data || [];
-      } catch (error2) {
+        const items = Array.isArray(response.data) ? response.data : [];
+        return { result: items, pagination: null };
+      } catch {
         throw this.handleError(error);
       }
     }
+  }
+
+  /** Returns series for a library page without per-item volume fetches. */
+  async getSeries(
+    libraryId: number,
+    pageNumber: number = 0,
+    pageSize: number = 50
+  ): Promise<SeriesDto[]> {
+    const { result } = await this.getSeriesList(libraryId, pageNumber, pageSize);
+    return result;
   }
 
   async getSeriesById(seriesId: number): Promise<any> {
