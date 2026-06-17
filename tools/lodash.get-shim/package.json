@@ -1,0 +1,9 @@
+{
+  "name": "lodash.get",
+  "version": "4.4.2-shim.0",
+  "description": "Local shim: lodash.get API via lodash/get (avoids deprecated npm package)",
+  "main": "index.js",
+  "dependencies": {
+    "lodash": "4.17.21"
+  }
+}
