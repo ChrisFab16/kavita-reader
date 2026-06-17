@@ -41,7 +41,8 @@
     "owner": "webtechnick",
     "plugins": [
       "expo-audio",
-      "./plugins/withAndroidCleartextTraffic"
+      "./plugins/withAndroidCleartextTraffic",
+      "./plugins/withAndroidReleaseSigning"
     ],
     "runtimeVersion": "1.0.0",
     "updates": {
