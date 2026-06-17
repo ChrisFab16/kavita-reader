@@ -17,7 +17,7 @@ import type { VolumeListItem } from './volumeDisplay';
 
 const FIXTURE_PATH = path.join(
   process.cwd(),
-  'specs/005-volume-display/fixtures/dungeon-meshi-volumes.json'
+  'src/test-fixtures/dungeon-meshi-volumes.json'
 );
 
 function makeVolume(id: number, name: string, chapterCount = 1, range = '1'): VolumeListItem {

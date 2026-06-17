@@ -1,18 +1,23 @@
 // src/screens/LibraryDetailScreen.tsx
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Dimensions, Keyboard, RefreshControl, ScrollView, Platform, ViewToken } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, Dimensions, Keyboard, RefreshControl, ScrollView, Platform, ViewToken, BackHandler } from 'react-native';
 import { Text, ActivityIndicator, Card, Searchbar, Chip, Button } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useServerStore } from '../stores/serverStore';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { SeriesDto } from '../types/kavita';
 import { formatSeriesListSubtitle, seriesProgressPercent } from '../utils/seriesInfo';
+import {
+  hasMoreSeriesPages,
+  mergeSeriesPages,
+  type LibrarySortMode,
+} from '../utils/seriesPagination';
+import { describeEmptyLibraryLoad } from '../utils/librarySeriesLoad';
 import type { Theme } from '../utils/theme';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import ScreenHeaderActions from '../components/ScreenHeaderActions';
 import { useLibraryReloadOnFocus } from '../hooks/useLibraryReloadOnFocus';
-import { useLibraryDisplayStore } from '../stores/libraryDisplayStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LibraryDetail'>;
 
@@ -30,7 +35,7 @@ type SeriesRow = SeriesDto[];
 type SeriesCardProps = {
   item: SeriesDto;
   coverUrl: string;
-  onPress: (seriesId: number) => void;
+  onPress: (item: SeriesDto) => void;
   theme: Theme;
   placeholderColor: string;
 };
@@ -42,7 +47,7 @@ const SeriesCard = memo(function SeriesCard({ item, coverUrl, onPress, theme, pl
   return (
     <TouchableOpacity
       style={styles.seriesCard}
-      onPress={() => onPress(item.id)}
+      onPress={() => onPress(item)}
       activeOpacity={0.7}
     >
       <Card style={[styles.card, { backgroundColor: theme.surface }]}>
@@ -92,8 +97,14 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'name' | 'recent'>('name');
+  const [sortBy, setSortBy] = useState<LibrarySortMode>('name');
+  const [loadingMore, setLoadingMore] = useState(false);
   const hasSeriesRef = useRef(false);
+  const pageRef = useRef(0);
+  const hasMoreRef = useRef(true);
+  const loadingMoreRef = useRef(false);
+  const loadRequestRef = useRef(0);
+  const endReachedReadyRef = useRef(false);
   hasSeriesRef.current = series.length > 0;
 
   const primaryServerId = useServerStore((state) => state.primaryServerId);
@@ -108,11 +119,82 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
   }, [serverUrl, primaryServerId]);
 
   const theme = useAppTheme();
-  const resetToken = useLibraryDisplayStore((state) => state.resetToken);
+  const [listGeneration, setListGeneration] = useState(0);
+  const seriesRowsRef = useRef<SeriesRow[]>([]);
 
-  const loadSeries = useCallback(async (options?: { refresh?: boolean; reset?: boolean }) => {
+  useEffect(() => {
+    const cancel = () => {
+      loadRequestRef.current += 1;
+    };
+    const blurSub = navigation.addListener('blur', cancel);
+    const backSub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+        return true;
+      }
+      return false;
+    });
+    return () => {
+      cancel();
+      blurSub();
+      backSub.remove();
+    };
+  }, [navigation]);
+
+  const fetchSeriesPage = useCallback(
+    async (pageNumber: number, noCache: boolean) => {
+      if (!client) {
+        throw new Error('Not connected to a server. Go back and sign in again.');
+      }
+      if (isCollection) {
+        return client.getSeriesByCollectionList(collectionId, pageNumber, PAGE_SIZE, { noCache });
+      }
+      return client.getSeriesList(libraryId!, pageNumber, PAGE_SIZE, { noCache, sortBy });
+    },
+    [client, collectionId, isCollection, libraryId, sortBy]
+  );
+
+  const loadSeries = useCallback(async (options?: { refresh?: boolean; reset?: boolean; page?: number; append?: boolean }) => {
     const isRefresh = options?.refresh === true;
     const isReset = options?.reset === true;
+    const append = options?.append === true;
+    const pageNumber = options?.page ?? 0;
+
+    if (libraryId == null && collectionId == null) {
+      setError('Missing library or collection.');
+      setLoading(false);
+      setRefreshing(false);
+      setLoadingMore(false);
+      loadingMoreRef.current = false;
+      return;
+    }
+
+    if (append) {
+      if (loadingMoreRef.current || !hasMoreRef.current || loading || refreshing) {
+        return;
+      }
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+      try {
+        const { result, pagination } = await fetchSeriesPage(pageNumber, false);
+        const items = result.filter((s): s is SeriesDto => typeof s.id === 'number');
+        hasMoreRef.current = hasMoreSeriesPages(pagination, items.length, PAGE_SIZE);
+        pageRef.current = pageNumber;
+        if (items.length > 0) {
+          setSeries((prev) => mergeSeriesPages(prev, items));
+        } else {
+          hasMoreRef.current = false;
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to load more series';
+        setError(message);
+        console.error('Failed to load more series:', err);
+      } finally {
+        setLoadingMore(false);
+        loadingMoreRef.current = false;
+      }
+      return;
+    }
 
     if (!client) {
       setError('Not connected to a server. Go back and sign in again.');
@@ -121,60 +203,86 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
       return;
     }
 
-    if (libraryId == null && collectionId == null) {
-      setError('Missing library or collection.');
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
+    const requestId = ++loadRequestRef.current;
+    endReachedReadyRef.current = false;
 
     setError(null);
     if (isReset) {
       setSeries([]);
       setSearchQuery('');
       setLoading(true);
+      setListGeneration((g) => g + 1);
+      pageRef.current = 0;
+      hasMoreRef.current = true;
     } else if (isRefresh) {
       setRefreshing(true);
+      pageRef.current = 0;
+      hasMoreRef.current = true;
     } else if (!hasSeriesRef.current) {
       setLoading(true);
+      pageRef.current = 0;
+      hasMoreRef.current = true;
     }
 
     try {
-      let items: SeriesDto[];
-      const noCache = isReset || isRefresh;
+      const { result, pagination } = await fetchSeriesPage(pageNumber, isReset || isRefresh);
+      const items = result.filter((s): s is SeriesDto => typeof s.id === 'number');
 
-      if (isCollection) {
-        items = isReset
-          ? await client.getAllSeriesByCollection(collectionId, { noCache })
-          : await client.getSeriesByCollection(collectionId, 0, PAGE_SIZE, { noCache: isRefresh });
-      } else {
-        items = isReset
-          ? await client.getAllSeriesInLibrary(libraryId!, { noCache })
-          : await client.getSeries(libraryId!, 0, PAGE_SIZE, { noCache: isRefresh });
+      if (requestId !== loadRequestRef.current) {
+        return;
       }
 
-      setSeries(items.filter((s): s is SeriesDto => typeof s.id === 'number'));
+      hasMoreRef.current = hasMoreSeriesPages(pagination, items.length, PAGE_SIZE);
+      pageRef.current = pageNumber;
+      setSeries(items);
+
+      if (items.length === 0) {
+        const emptyMessage = describeEmptyLibraryLoad(pagination, { isCollection });
+        if (emptyMessage) {
+          setError(emptyMessage);
+        }
+      }
     } catch (err: unknown) {
+      if (requestId !== loadRequestRef.current) {
+        return;
+      }
       const message = err instanceof Error ? err.message : 'Failed to load series';
       setError(message);
       console.error('Failed to load series:', err);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === loadRequestRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+        endReachedReadyRef.current = true;
+      }
     }
-  }, [client, libraryId, collectionId, isCollection]);
+  }, [client, fetchSeriesPage, loading, refreshing]);
+
+  const loadSeriesRef = useRef(loadSeries);
+  loadSeriesRef.current = loadSeries;
 
   useEffect(() => {
-    loadSeries();
-  }, [loadSeries]);
+    loadSeriesRef.current();
+  }, [libraryId, collectionId, sortBy]);
 
   const handleRefresh = useCallback(() => {
-    loadSeries({ refresh: true });
-  }, [loadSeries]);
+    loadSeriesRef.current({ refresh: true, page: 0 });
+  }, []);
 
   const handleFullReset = useCallback(() => {
-    loadSeries({ reset: true });
-  }, [loadSeries]);
+    loadSeriesRef.current({ reset: true, page: 0 });
+  }, []);
+
+  const handleLoadMore = useCallback(() => {
+    if (!endReachedReadyRef.current || loadingMoreRef.current || !hasMoreRef.current || loading || refreshing) {
+      return;
+    }
+    loadSeriesRef.current({ append: true, page: pageRef.current + 1 });
+  }, [loading, refreshing]);
+
+  const onMomentumScrollBegin = useCallback(() => {
+    endReachedReadyRef.current = true;
+  }, []);
 
   useLibraryReloadOnFocus(handleFullReset);
 
@@ -185,51 +293,44 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
         <ScreenHeaderActions
           navigation={navigation}
           onRefresh={handleRefresh}
-          refreshing={refreshing}
         />
       ),
     });
-  }, [navigation, handleRefresh, refreshing]);
+  }, [navigation, libraryName, handleRefresh]);
 
   const getCoverUrl = useCallback((seriesId: number) => {
     if (!client) return '';
     return client.getCoverImageUrl(seriesId);
   }, [client]);
 
-  const sortedSeries = useMemo(() => {
-    const query = searchQuery.toLowerCase();
-    const filtered = series.filter((s) =>
-      s.name?.toLowerCase().includes(query)
-    );
-    return [...filtered].sort((a, b) => {
-      if (sortBy === 'name') {
-        return (a.name || '').localeCompare(b.name || '');
-      }
-      return new Date(b.created || 0).getTime() - new Date(a.created || 0).getTime();
-    });
-  }, [series, searchQuery, sortBy]);
+  const displayedSeries = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return series;
+    }
+    return series.filter((s) => s.name?.toLowerCase().includes(query));
+  }, [series, searchQuery]);
 
   /** Pair series into rows — avoids FlatList numColumns + getItemLayout scroll bugs. */
   const seriesRows = useMemo(() => {
     const rows: SeriesRow[] = [];
-    for (let i = 0; i < sortedSeries.length; i += 2) {
-      rows.push(sortedSeries.slice(i, i + 2));
+    for (let i = 0; i < displayedSeries.length; i += 2) {
+      rows.push(displayedSeries.slice(i, i + 2));
     }
     return rows;
-  }, [sortedSeries]);
+  }, [displayedSeries]);
 
-  const prefetchCoverUrls = useCallback((items: SeriesDto[]) => {
-    if (!client) return;
-    items.forEach((item) => {
-      const url = client.getCoverImageUrl(item.id);
-      if (url) {
-        void Image.prefetch(url);
-      }
-    });
-  }, [client]);
+  seriesRowsRef.current = seriesRows;
 
-  const onViewableRowsChanged = useCallback(
+  const clientRef = useRef(client);
+  clientRef.current = client;
+
+  const onViewableRowsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken<SeriesRow>[] }) => {
+      const activeClient = clientRef.current;
+      if (!activeClient) return;
+
+      const rows = seriesRowsRef.current;
       const visible: SeriesDto[] = [];
       let maxRowIndex = -1;
 
@@ -242,28 +343,45 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
         }
       });
 
-      prefetchCoverUrls(visible);
+      const prefetch = (items: SeriesDto[]) => {
+        items.forEach((item) => {
+          const url = activeClient.getCoverImageUrl(item.id);
+          if (url) {
+            void Image.prefetch(url);
+          }
+        });
+      };
+
+      prefetch(visible);
 
       if (maxRowIndex >= 0) {
         const ahead: SeriesDto[] = [];
-        for (let row = maxRowIndex + 1; row <= maxRowIndex + 3 && row < seriesRows.length; row += 1) {
-          ahead.push(...seriesRows[row]);
+        for (let row = maxRowIndex + 1; row <= maxRowIndex + 3 && row < rows.length; row += 1) {
+          ahead.push(...rows[row]);
         }
-        prefetchCoverUrls(ahead);
+        prefetch(ahead);
       }
-    },
-    [prefetchCoverUrls, seriesRows]
-  );
+    }
+  ).current;
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 15 }).current;
 
   useEffect(() => {
-    if (seriesRows.length === 0) return;
-    prefetchCoverUrls(seriesRows.slice(0, 6).flat());
-  }, [seriesRows, prefetchCoverUrls]);
+    if (seriesRows.length === 0 || !client) return;
+    seriesRows.slice(0, 6).flat().forEach((item) => {
+      const url = client.getCoverImageUrl(item.id);
+      if (url) {
+        void Image.prefetch(url);
+      }
+    });
+  }, [seriesRows.length, client]);
 
-  const handleSeriesPress = useCallback((seriesId: number) => {
-    navigation.navigate('SeriesDetail', { seriesId });
+  const handleSeriesPress = useCallback((item: SeriesDto) => {
+    navigation.navigate('SeriesDetail', {
+      seriesId: item.id,
+      seriesName: item.name,
+      seriesSummary: item.summary || undefined,
+    });
   }, [navigation]);
 
   const renderSeriesRow = useCallback(({ item: row }: { item: SeriesRow }) => (
@@ -296,30 +414,19 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
     []
   );
 
-  if (loading) {
+  const renderListFooter = useCallback(() => {
+    if (!loadingMore) {
+      return null;
+    }
     return (
-      <View style={[styles.centerContainer, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color={theme.primary} />
-        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading series...</Text>
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color={theme.primary} />
       </View>
     );
-  }
+  }, [loadingMore, theme.primary]);
 
-  if (error && series.length === 0) {
-    return (
-      <View style={[styles.centerContainer, { backgroundColor: theme.background }]}>
-        <Text variant="titleLarge" style={{ color: theme.text, textAlign: 'center' }}>
-          Could not load library
-        </Text>
-        <Text variant="bodyMedium" style={[styles.emptyText, { color: theme.textSecondary }]}>
-          {error}
-        </Text>
-        <Button mode="contained" onPress={() => loadSeries()} style={styles.retryButton}>
-          Retry
-        </Button>
-      </View>
-    );
-  }
+  const showInitialLoader = loading && series.length === 0;
+  const showInitialError = !loading && error != null && series.length === 0;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -371,7 +478,24 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
         </Chip>
       </View>
 
-      {sortedSeries.length === 0 ? (
+      {showInitialLoader ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading series...</Text>
+        </View>
+      ) : showInitialError ? (
+        <View style={styles.centerContainer}>
+          <Text variant="titleLarge" style={{ color: theme.text, textAlign: 'center' }}>
+            Could not load library
+          </Text>
+          <Text variant="bodyMedium" style={[styles.emptyText, { color: theme.textSecondary }]}>
+            {error}
+          </Text>
+          <Button mode="contained" onPress={() => loadSeriesRef.current()} style={styles.retryButton}>
+            Retry
+          </Button>
+        </View>
+      ) : displayedSeries.length === 0 ? (
         <ScrollView
           contentContainerStyle={styles.centerContainer}
           refreshControl={
@@ -394,7 +518,7 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
         </ScrollView>
       ) : (
         <FlatList
-          key={`${collectionId ?? libraryId}-${resetToken}`}
+          key={listGeneration}
           data={seriesRows}
           renderItem={renderSeriesRow}
           keyExtractor={rowKeyExtractor}
@@ -409,6 +533,10 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
           getItemLayout={getRowLayout}
           onViewableItemsChanged={onViewableRowsChanged}
           viewabilityConfig={viewabilityConfig}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.35}
+          onMomentumScrollBegin={onMomentumScrollBegin}
+          ListFooterComponent={renderListFooter}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -524,5 +652,9 @@ const styles = StyleSheet.create({
   emptyText: {
     marginTop: 8,
     textAlign: 'center',
+  },
+  footerLoader: {
+    paddingVertical: 16,
+    alignItems: 'center',
   },
 });

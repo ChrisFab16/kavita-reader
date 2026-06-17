@@ -16,8 +16,15 @@ export type RootStackParamList = {
   Login: { serverUrl: string };
   Home: undefined;
   LibraryDetail: { libraryId?: number; libraryName: string; collectionId?: number };
-  SeriesDetail: { seriesId: number };
-  Reader: { chapterId: number; seriesId: number; chapterFormat?: number; fileName?: string };
+  SeriesDetail: { seriesId: number; seriesName?: string; seriesSummary?: string };
+  Reader: {
+    chapterId: number;
+    seriesId: number;
+    volumeId?: number;
+    libraryId?: number;
+    chapterFormat?: number;
+    fileName?: string;
+  };
   Settings: undefined;
 };
 
