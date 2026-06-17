@@ -59,3 +59,4 @@ On branch **`speckit-work`**, numbered feature specs duplicate summaries but MUS
 - `specs/006-library-data-reset/` — reset / refresh
 - `specs/007-library-browse-stability/` — pagination / scoping fixes
 - `specs/008-reading-progress-sync/` — reading progress GET/POST
+- `specs/011-reader-zoom-gestures/` — image reader zoom, fit, gestures, prefetch (fork-only; feature contract at `specs/011-reader-zoom-gestures/contracts/`)
