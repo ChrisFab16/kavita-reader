@@ -19,6 +19,21 @@ import {
   normalizeProgressDto,
 } from '../utils/kavitaDto';
 import { validateProgressPayload } from '../utils/readingProgress';
+import { isPdfChapter } from '../utils/readerChapter';
+
+export type PageImageAuthSource = {
+  uri: string;
+  headers: { Authorization: string };
+};
+
+export type ChapterInfoRequestOptions = {
+  extractPdf?: boolean;
+  includeDimensions?: boolean;
+};
+
+export type PageImageUrlOptions = {
+  extractPdf?: boolean;
+};
 
 const PUBLIC_API_PATHS = new Set([
   '/api/health',
@@ -534,15 +549,35 @@ export class KavitaClient {
     }
   }
 
-  async getChapterInfo(chapterId: number): Promise<ChapterInfoDto> {
+  async getChapterInfo(
+    chapterId: number,
+    options?: ChapterInfoRequestOptions
+  ): Promise<ChapterInfoDto> {
     try {
-      const response = await this.client.get(`/api/Reader/chapter-info`, {
-        params: { chapterId }
-      });
+      const params: Record<string, string | number | boolean> = { chapterId };
+      if (options?.extractPdf) {
+        params.extractPdf = true;
+      }
+      if (options?.includeDimensions) {
+        params.includeDimensions = true;
+      }
+      const response = await this.client.get(`/api/Reader/chapter-info`, { params });
       return normalizeChapterInfo(response.data);
     } catch (error) {
       throw this.handleError(error);
     }
+  }
+
+  /** PDF chapters: warm server cache and fetch page dimensions (Q6 A+C). */
+  async getChapterInfoForReader(chapterId: number): Promise<ChapterInfoDto> {
+    const initial = await this.getChapterInfo(chapterId);
+    if (!isPdfChapter(initial)) {
+      return initial;
+    }
+    return this.getChapterInfo(chapterId, {
+      extractPdf: true,
+      includeDimensions: true,
+    });
   }
 
   async getProgress(chapterId: number): Promise<ProgressDto> {
@@ -706,13 +741,35 @@ export class KavitaClient {
     return `${this.baseUrl}/api/Image/chapter-cover?${params.toString()}`;
   }
 
-  getPageImageUrl(chapterId: number, page: number): string {
+  getPageImageUrl(
+    chapterId: number,
+    page: number,
+    options?: PageImageUrlOptions
+  ): string {
     const params = new URLSearchParams({
       chapterId: chapterId.toString(),
       page: page.toString(),
     });
+    if (options?.extractPdf) {
+      params.append('extractPdf', 'true');
+    }
     if (this.apiKey) params.append('apiKey', this.apiKey);
     return `${this.baseUrl}/api/Reader/image?${params.toString()}`;
+  }
+
+  getPageImageAuthSource(
+    chapterId: number,
+    page: number,
+    options?: PageImageUrlOptions
+  ): PageImageAuthSource {
+    const token = this.token;
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+    return {
+      uri: this.getPageImageUrl(chapterId, page, options),
+      headers: { Authorization: `Bearer ${token}` },
+    };
   }
 
   async cacheImages(chapterId: number): Promise<void> {

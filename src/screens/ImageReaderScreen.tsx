@@ -1,34 +1,35 @@
 // src/screens/ImageReaderScreen.tsx
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   StyleSheet,
-  Dimensions,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Image as RNImage,
   BackHandler,
+  useWindowDimensions,
 } from 'react-native';
-import { Text, IconButton, ProgressBar } from 'react-native-paper';
+import { Text, IconButton, ProgressBar, Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { Audio } from 'expo-av';
 import { useServerStore } from '../stores/serverStore';
 import { useThemeStore } from '../stores/themeStore';
 import { exitReader, readerChromeOverlay } from '../utils/readerNavigation';
 import { buildProgressPayload } from '../utils/readingProgress';
+import { autoFitMode, computeDisplaySize } from '../utils/readerFit';
+import { getPageDimensionsFromChapter, isPdfChapter } from '../utils/readerChapter';
 import type { ChapterInfoDto, ProgressDto } from '../types/kavita';
+import type { PageImageAuthSource } from '../api/kavitaClient';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Reader'>;
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const SCREEN_HEIGHT = Dimensions.get('window').height;
-
 export default function ImageReaderScreen({ route, navigation }: Props) {
   const { chapterId, seriesId, volumeId, libraryId } = route.params;
-  
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+
   const [chapterInfo, setChapterInfo] = useState<ChapterInfoDto | null>(null);
   const [progressHint, setProgressHint] = useState<ProgressDto | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
@@ -36,18 +37,58 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [showControls, setShowControls] = useState(true);
   const [progressSaveError, setProgressSaveError] = useState<string | null>(null);
-  const [imageData, setImageData] = useState<string>('');
-  const [imageLoading, setImageLoading] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
+  const [loadedImageSize, setLoadedImageSize] = useState<{ width: number; height: number } | null>(null);
+  const [imageRetryKey, setImageRetryKey] = useState(0);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
-  
+
   const client = useServerStore((state) => state.getActiveClient());
   const isGrayscaleReading = useThemeStore((state) => state.isGrayscaleReading);
   const pageTurnSoundsEnabled = useThemeStore((state) => state.pageTurnSoundsEnabled);
 
+  const fitMode = autoFitMode(windowWidth, windowHeight);
+  const tapZoneWidth = windowWidth * 0.3;
+
+  const pageImageSource = useMemo((): PageImageAuthSource | null => {
+    if (!client || !chapterInfo) {
+      return null;
+    }
+    try {
+      return client.getPageImageAuthSource(chapterId, currentPage, {
+        extractPdf: isPdfChapter(chapterInfo),
+      });
+    } catch {
+      return null;
+    }
+  }, [client, chapterInfo, chapterId, currentPage]);
+
+  const knownPageSize = useMemo(() => {
+    if (!chapterInfo) {
+      return null;
+    }
+    return getPageDimensionsFromChapter(chapterInfo, currentPage);
+  }, [chapterInfo, currentPage]);
+
+  const imageNativeSize = knownPageSize ?? loadedImageSize;
+
+  const displaySize = useMemo(() => {
+    if (!imageNativeSize) {
+      return { width: windowWidth, height: windowHeight };
+    }
+    return computeDisplaySize(
+      imageNativeSize.width,
+      imageNativeSize.height,
+      windowWidth,
+      windowHeight,
+      fitMode
+    );
+  }, [imageNativeSize, windowWidth, windowHeight, fitMode]);
+
   useEffect(() => {
     loadSound();
     loadChapter();
-    
+
     return () => {
       if (sound) {
         sound.unloadAsync();
@@ -56,10 +97,10 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!loading && chapterInfo) {
-      loadImageWithAuth(currentPage);
-    }
-  }, [currentPage, loading]);
+    setImageLoading(true);
+    setImageError(false);
+    setLoadedImageSize(null);
+  }, [currentPage, chapterId]);
 
   const loadSound = async () => {
     try {
@@ -68,147 +109,70 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
         { volume: 0.3 }
       );
       setSound(newSound);
-    } catch (error) {
+    } catch {
       console.log('⚠️ Sound file not found - page turns will be silent');
     }
   };
 
   const playPageTurnSound = async () => {
     if (!pageTurnSoundsEnabled || !sound) return;
-    
+
     try {
       await sound.replayAsync();
-    } catch (error) {
-      console.log('⚠️ Failed to play sound:', error);
+    } catch {
+      console.log('⚠️ Failed to play sound');
     }
   };
 
   const loadChapter = async () => {
     if (!client) {
-      console.log('❌ No client available');
       return;
     }
-    
-    console.log('📚 Loading chapter...');
-    console.log('  ℹ️ Chapter ID:', chapterId);
-    setLoading(true);
-    
-    try {
-      console.log('  📡 Fetching chapter info from API...');
-      const info = await client.getChapterInfo(chapterId);
-      console.log('    ✅ Chapter info received');
-      console.log('    ℹ️ Title:', info.title);
-      console.log('    ℹ️ Total pages:', info.pages);
-      console.log('    ℹ️ Library ID:', info.libraryId);
-      console.log('    ℹ️ File name:', info.fileName);
 
+    setLoading(true);
+
+    try {
+      const info = await client.getChapterInfoForReader(chapterId);
       const progress = await client.getProgress(chapterId);
-      console.log('    ℹ️ Saved progress page:', progress.pageNum);
       setProgressHint(progress);
-      
       setChapterInfo(info);
       setTotalPages(info.pages || 0);
-      
+
       const startPage = progress.pageNum > 0 ? progress.pageNum : 0;
-      console.log('  📄 Starting at page:', startPage + 1, '(0-indexed:', startPage + ')');
       setCurrentPage(startPage);
-      
-      console.log('  💿 Caching chapter...');
+
       await client.cacheChapter(chapterId);
-      console.log('    ✅ Chapter cached');
-      
       setLoading(false);
-      console.log('✅ Chapter loaded successfully');
-      
-    } catch (error: any) {
-      console.log('❌ Failed to load chapter');
-      console.log('  ℹ️ Error:', error.message);
-      console.log('  ℹ️ Chapter ID:', chapterId);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.log('❌ Failed to load chapter:', message);
       Alert.alert('Error', 'Failed to load chapter');
       setLoading(false);
     }
   };
 
-  const loadImageWithAuth = async (page: number) => {
-    if (!client) {
-      console.log('❌ No client available for image loading');
-      return;
-    }
-    
-    console.log('🖼️ Loading image for page', page + 1);
-    setImageLoading(true);
-    
-    try {
-      const apiKey = client.getApiKey();
-      const url = `${client.getBaseUrl()}/api/Reader/image?chapterId=${chapterId}&page=${page}&extractPdf=true&apiKey=${apiKey}`;
-      const token = client.getToken();
-      
-      console.log('  📡 Fetching image from API...');
-      console.log('    ℹ️ Page:', page + 1, '/', totalPages);
-      console.log('    ℹ️ Extract PDF: true');
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      console.log('  📥 Response received');
-      console.log('    ℹ️ Status:', response.status);
-      
-      if (!response.ok) {
-        console.log('  ❌ Failed to load page');
-        console.log('    ℹ️ HTTP Status:', response.status);
-        Alert.alert('Error', `Failed to load page ${page + 1}`);
-        setImageLoading(false);
-        setLoading(false);
-        return;
+  const handleImageLoad = useCallback(
+    (event: { source: { width: number; height: number } }) => {
+      const { width, height } = event.source;
+      if (width > 0 && height > 0) {
+        setLoadedImageSize({ width, height });
       }
-      
-      console.log('  📦 Converting response to blob...');
-      const blob = await response.blob();
-      console.log('    ℹ️ Blob size:', (blob.size / 1024).toFixed(2), 'KB');
-      
-      console.log('  🔄 Converting to base64...');
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        setImageData(base64);
-        setImageLoading(false);
-        setLoading(false);
-        console.log('  ✅ Image loaded and displayed');
-        console.log('    ℹ️ Base64 length:', base64.length, 'characters');
-      };
-      reader.onerror = () => {
-        console.log('  ❌ FileReader error');
-        Alert.alert('Error', 'Failed to process image');
-        setImageLoading(false);
-        setLoading(false);
-      };
-      reader.readAsDataURL(blob);
-      
-    } catch (error: any) {
-      console.log('❌ Failed to load image');
-      console.log('  ℹ️ Error:', error.message);
-      console.log('  ℹ️ Error name:', error.name);
-      console.log('  ℹ️ Page:', page + 1);
-      
-      if (error.name === 'AbortError') {
-        console.log('  ⏱️ Request timed out after 30 seconds');
-        Alert.alert('Timeout', 'Page took too long to load');
-      } else {
-        Alert.alert('Error', 'Failed to load page');
-      }
-      
       setImageLoading(false);
-      setLoading(false);
-    }
-  };
+      setImageError(false);
+    },
+    []
+  );
+
+  const handleImageError = useCallback(() => {
+    setImageLoading(false);
+    setImageError(true);
+  }, []);
+
+  const retryImageLoad = useCallback(() => {
+    setImageError(false);
+    setImageLoading(true);
+    setImageRetryKey((key) => key + 1);
+  }, []);
 
   const saveProgress = useCallback(async () => {
     if (!client || !chapterInfo || currentPage <= 0) {
@@ -262,20 +226,15 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
 
   const goToNextPage = () => {
     if (currentPage < totalPages - 1) {
-      console.log('➡️ Next page:', currentPage + 2, '/', totalPages);
       playPageTurnSound();
       setCurrentPage(currentPage + 1);
     } else {
-      console.log('🏁 Reached end of chapter');
       Alert.alert(
         'Chapter Complete',
         "You've reached the end of this chapter.",
         [
           { text: 'Stay Here', style: 'cancel' },
-          { 
-            text: 'Go Back', 
-            onPress: handleExit,
-          },
+          { text: 'Go Back', onPress: handleExit },
         ]
       );
     }
@@ -283,11 +242,8 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
 
   const goToPreviousPage = () => {
     if (currentPage > 0) {
-      console.log('⬅️ Previous page:', currentPage, '/', totalPages);
       playPageTurnSound();
       setCurrentPage(currentPage - 1);
-    } else {
-      console.log('⚠️ Already at first page');
     }
   };
 
@@ -307,18 +263,29 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
         activeOpacity={1}
         onPress={() => setShowControls(!showControls)}
       >
-        {imageLoading && imageData && (
+        {imageLoading && pageImageSource && !imageError && (
           <View style={styles.imageLoadingOverlay}>
             <ActivityIndicator size="small" color="#1976D2" />
           </View>
         )}
-        
-        {imageData ? (
-          <View>
-            <RNImage
-              source={{ uri: imageData }}
+
+        {imageError ? (
+          <View style={styles.placeholderContainer}>
+            <Text style={styles.placeholderText}>Failed to load page {currentPage + 1}</Text>
+            <Button mode="contained" onPress={retryImageLoad} style={styles.retryButton}>
+              Retry
+            </Button>
+          </View>
+        ) : pageImageSource ? (
+          <View style={[styles.pageFrame, { width: displaySize.width, height: displaySize.height }]}>
+            <Image
+              key={`${chapterId}-${currentPage}-${imageRetryKey}`}
+              source={pageImageSource}
+              recyclingKey={`${chapterId}-${currentPage}`}
               style={styles.pageImage}
-              resizeMode="contain"
+              contentFit="contain"
+              onLoad={handleImageLoad}
+              onError={handleImageError}
             />
             {isGrayscaleReading && (
               <View style={styles.grayscaleOverlay} pointerEvents="none" />
@@ -335,12 +302,12 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
       {!showControls && (
         <>
           <TouchableOpacity
-            style={[styles.leftTapZone, styles.pageTurnZone]}
+            style={[styles.pageTurnZone, { left: 0, width: tapZoneWidth }]}
             onPress={goToPreviousPage}
             activeOpacity={0.3}
           />
           <TouchableOpacity
-            style={[styles.rightTapZone, styles.pageTurnZone]}
+            style={[styles.pageTurnZone, { right: 0, width: tapZoneWidth }]}
             onPress={goToNextPage}
             activeOpacity={0.3}
           />
@@ -436,9 +403,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     zIndex: 10,
   },
+  pageFrame: {
+    overflow: 'hidden',
+  },
   pageImage: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+    width: '100%',
+    height: '100%',
   },
   grayscaleOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -447,26 +417,20 @@ const styles = StyleSheet.create({
   placeholderContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 24,
   },
   placeholderText: {
     color: '#fff',
     marginTop: 16,
+    textAlign: 'center',
   },
-  leftTapZone: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: SCREEN_WIDTH * 0.3,
-  },
-  rightTapZone: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: SCREEN_WIDTH * 0.3,
+  retryButton: {
+    marginTop: 16,
   },
   pageTurnZone: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
     zIndex: 5,
   },
   progressErrorBanner: {

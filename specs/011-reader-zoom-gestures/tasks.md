@@ -7,14 +7,14 @@
 
 ## Phase 1 — Foundation (memory + rotation + fit static)
 
-- [ ] **T001** Add `getPageImageAuthSource(chapterId, page, { extractPdf? })` — `extractPdf=true` only when chapter is PDF (Q6-A)
-- [ ] **T001b** Extend `getChapterInfo(chapterId, options?)` — for PDF: `extractPdf=true`, `includeDimensions=true` on open (Q6-C); use `pageDimensions` for fit math when available
-- [ ] **T002** Add `readerFit.ts`: `computeFitScale(imageSize, viewport, mode)`, `autoFitMode(orientation)`, unit tests with fixture aspect ratios
-- [ ] **T003** Replace module `SCREEN_WIDTH`/`SCREEN_HEIGHT` with `useWindowDimensions` in `ImageReaderScreen`
-- [ ] **T004** Remove base64 `fetch`/`FileReader` pipeline; render with `expo-image` + auth headers
-- [ ] **T005** Apply auto fit: portrait `fitScreen`, landscape `fitWidth` (static `contentFit` / layout until T008)
-- [ ] **T006** Add `onLoad` / `onError` handlers; retry button on failure
-- [ ] **T007** Verify grayscale overlay still covers full page
+- [x] **T001** Add `getPageImageAuthSource(chapterId, page, { extractPdf? })` — `extractPdf=true` only when chapter is PDF (Q6-A)
+- [x] **T001b** Extend `getChapterInfo(chapterId, options?)` — for PDF: `extractPdf=true`, `includeDimensions=true` on open (Q6-C); use `pageDimensions` for fit math when available
+- [x] **T002** Add `readerFit.ts`: `computeFitScale(imageSize, viewport, mode)`, `autoFitMode(orientation)`, unit tests with fixture aspect ratios
+- [x] **T003** Replace module `SCREEN_WIDTH`/`SCREEN_HEIGHT` with `useWindowDimensions` in `ImageReaderScreen`
+- [x] **T004** Remove base64 `fetch`/`FileReader` pipeline; render with `expo-image` + auth headers
+- [x] **T005** Apply auto fit: portrait `fitScreen`, landscape `fitWidth` (static `contentFit` / layout until T008)
+- [x] **T006** Add `onLoad` / `onError` handlers; retry button on failure
+- [x] **T007** Verify grayscale overlay still covers full page
 - [ ] **T008** Manual: rotate mid-read on CBZ chapter; confirm layout
 
 **Phase 1 gate**: No `imageData` base64 state; landscape fit-to-width visible.

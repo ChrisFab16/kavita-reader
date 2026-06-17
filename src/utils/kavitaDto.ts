@@ -1,4 +1,4 @@
-import type { ChapterInfoDto, ProgressDto } from '../types/kavita';
+import type { ChapterInfoDto, FileDimensionDto, ProgressDto } from '../types/kavita';
 import { MangaFormat } from '../types/kavita';
 
 /** Read a numeric Kavita field (camelCase or PascalCase JSON). */
@@ -12,6 +12,30 @@ export function readKavitaString(source: Record<string, unknown>, key: string): 
   const pascalKey = key.charAt(0).toUpperCase() + key.slice(1);
   const value = source[key] ?? source[pascalKey];
   return typeof value === 'string' ? value : '';
+}
+
+function normalizePageDimensions(raw: unknown): FileDimensionDto[] | undefined {
+  if (!Array.isArray(raw)) {
+    return undefined;
+  }
+  const dims: FileDimensionDto[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    const row = item as Record<string, unknown>;
+    const width = readKavitaInt(row, 'width');
+    const height = readKavitaInt(row, 'height');
+    if (width <= 0 || height <= 0) {
+      continue;
+    }
+    dims.push({
+      width,
+      height,
+      pageNumber: readKavitaInt(row, 'pageNumber'),
+    });
+  }
+  return dims.length > 0 ? dims : undefined;
 }
 
 export function normalizeChapterInfo(raw: unknown): ChapterInfoDto {
@@ -28,6 +52,7 @@ export function normalizeChapterInfo(raw: unknown): ChapterInfoDto {
     pages: readKavitaInt(data, 'pages'),
     fileName: readKavitaString(data, 'fileName') || null,
     seriesFormat: format in MangaFormat ? format : MangaFormat.Unknown,
+    pageDimensions: normalizePageDimensions(data.pageDimensions ?? data.PageDimensions),
   };
 }
 

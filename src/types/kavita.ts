@@ -88,6 +88,12 @@ export interface ProgressDto {
 }
 
 /** Kavita `API.DTOs.Reader.ChapterInfoDto` — subset used by the reader. */
+export interface FileDimensionDto {
+  width: number;
+  height: number;
+  pageNumber: number;
+}
+
 export interface ChapterInfoDto {
   chapterNumber: string;
   volumeNumber: string;
@@ -99,6 +105,7 @@ export interface ChapterInfoDto {
   pages: number;
   fileName?: string | null;
   seriesFormat: MangaFormat;
+  pageDimensions?: FileDimensionDto[];
 }
 
 export enum MangaFormat {
