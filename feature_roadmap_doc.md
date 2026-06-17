@@ -1,7 +1,7 @@
 # KavitaReader - Feature Roadmap & Ideas
 
 > **Created:** December 1, 2024  
-> **Last Updated:** December 1, 2024  
+> **Last Updated:** June 16, 2026  
 > **Maintainer:** Norm (Nicholas Hess)
 
 This document tracks planned features, ideas, and the development roadmap for KavitaReader.
@@ -166,6 +166,8 @@ Features being evaluated for future versions:
 - [ ] Font Picker
 
 #### Ideas
+- [ ] **Reader page prefetch (default)** — When the user starts reading, auto-cache the **next 2 pages** ahead of the current page so page turns stay instant on slow links.
+- [ ] **Cache entire album (optional)** — Settings toggle to prefetch/cache the **full current chapter/album** (CBZ/CBR/image set) instead of the 2-page window; useful before offline reading or on fast Wi‑Fi.
 - [ ] Reading Timer (session tracking)
 - [ ] Auto-Scroll for EPUBs
 - [ ] Double-Page View (landscape/tablets)
