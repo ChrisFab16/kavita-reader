@@ -18,6 +18,7 @@ export function computeFitScale(
   viewportHeight: number,
   mode: ReaderFitMode
 ): number {
+  'worklet';
   if (imageWidth <= 0 || imageHeight <= 0 || viewportWidth <= 0 || viewportHeight <= 0) {
     return 1;
   }
@@ -51,5 +52,35 @@ export function computeDisplaySize(
   return {
     width: imageWidth * scale,
     height: imageHeight * scale,
+  };
+}
+
+export const MAX_ZOOM_SCALE = 4;
+
+/** Toggle target: fit (1) ↔ 2× fit (Q4 portrait; 2× fit-width when landscape default is already fit-width). */
+export function getToggleZoomScale(currentScale: number): number {
+  'worklet';
+  return currentScale > 1.01 ? 1 : 2;
+}
+
+export function clampPanTranslation(
+  imageWidth: number,
+  imageHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  mode: ReaderFitMode,
+  userScale: number,
+  translateX: number,
+  translateY: number
+): { x: number; y: number } {
+  'worklet';
+  const fitScale = computeFitScale(imageWidth, imageHeight, viewportWidth, viewportHeight, mode);
+  const displayedW = imageWidth * fitScale * userScale;
+  const displayedH = imageHeight * fitScale * userScale;
+  const maxTx = Math.max(0, (displayedW - viewportWidth) / 2);
+  const maxTy = Math.max(0, (displayedH - viewportHeight) / 2);
+  return {
+    x: Math.min(maxTx, Math.max(-maxTx, translateX)),
+    y: Math.min(maxTy, Math.max(-maxTy, translateY)),
   };
 }

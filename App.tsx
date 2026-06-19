@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { PaperProvider, MD3DarkTheme, MD3LightTheme } from 'react-native-paper';
 import AppNavigator from './src/navigation/AppNavigator';
 import { useThemeStore } from './src/stores/themeStore';
@@ -98,9 +99,11 @@ export default function App() {
   }
 
   return (
-    <PaperProvider theme={paperTheme}>
-      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
-      <AppNavigator theme={navigationTheme} initialRouteName={boot.initialRoute} />
-    </PaperProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <PaperProvider theme={paperTheme}>
+        <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+        <AppNavigator theme={navigationTheme} initialRouteName={boot.initialRoute} />
+      </PaperProvider>
+    </GestureHandlerRootView>
   );
 }

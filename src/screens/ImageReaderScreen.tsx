@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   ActivityIndicator,
   Alert,
   BackHandler,
@@ -13,12 +13,14 @@ import { Text, IconButton, ProgressBar, Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Audio } from 'expo-av';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { useServerStore } from '../stores/serverStore';
 import { useThemeStore } from '../stores/themeStore';
 import { exitReader, readerChromeOverlay } from '../utils/readerNavigation';
 import { buildProgressPayload } from '../utils/readingProgress';
-import { autoFitMode, computeDisplaySize } from '../utils/readerFit';
+import { autoFitMode } from '../utils/readerFit';
 import { getPageDimensionsFromChapter, isPdfChapter } from '../utils/readerChapter';
+import ZoomablePageView from '../components/reader/ZoomablePageView';
 import type { ChapterInfoDto, ProgressDto } from '../types/kavita';
 import type { PageImageAuthSource } from '../api/kavitaClient';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -41,6 +43,8 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
   const [imageError, setImageError] = useState(false);
   const [loadedImageSize, setLoadedImageSize] = useState<{ width: number; height: number } | null>(null);
   const [imageRetryKey, setImageRetryKey] = useState(0);
+  const [pageZoomScale, setPageZoomScale] = useState(1);
+  const [isPageZoomed, setIsPageZoomed] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   const client = useServerStore((state) => state.getActiveClient());
@@ -48,7 +52,6 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
   const pageTurnSoundsEnabled = useThemeStore((state) => state.pageTurnSoundsEnabled);
 
   const fitMode = autoFitMode(windowWidth, windowHeight);
-  const tapZoneWidth = windowWidth * 0.3;
 
   const pageImageSource = useMemo((): PageImageAuthSource | null => {
     if (!client || !chapterInfo) {
@@ -71,19 +74,27 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
   }, [chapterInfo, currentPage]);
 
   const imageNativeSize = knownPageSize ?? loadedImageSize;
+  /** Fallback until onLoad or chapter dimensions arrive (ZoomablePageView needs numeric size). */
+  const layoutNativeSize = imageNativeSize ?? { width: windowWidth, height: windowHeight };
 
-  const displaySize = useMemo(() => {
-    if (!imageNativeSize) {
-      return { width: windowWidth, height: windowHeight };
-    }
-    return computeDisplaySize(
-      imageNativeSize.width,
-      imageNativeSize.height,
-      windowWidth,
-      windowHeight,
-      fitMode
-    );
-  }, [imageNativeSize, windowWidth, windowHeight, fitMode]);
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await ScreenOrientation.unlockAsync();
+      } catch (error) {
+        if (!cancelled) {
+          console.warn('Screen orientation unlock failed:', error);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    };
+  }, []);
 
   useEffect(() => {
     loadSound();
@@ -101,6 +112,11 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
     setImageError(false);
     setLoadedImageSize(null);
   }, [currentPage, chapterId]);
+
+  useEffect(() => {
+    setPageZoomScale(1);
+    setIsPageZoomed(false);
+  }, [chapterId]);
 
   const loadSound = async () => {
     try {
@@ -224,7 +240,14 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
     return () => sub.remove();
   }, [handleExit]);
 
-  const goToNextPage = () => {
+  const goToPreviousPage = useCallback(() => {
+    if (currentPage > 0) {
+      playPageTurnSound();
+      setCurrentPage(currentPage - 1);
+    }
+  }, [currentPage, playPageTurnSound]);
+
+  const goToNextPage = useCallback(() => {
     if (currentPage < totalPages - 1) {
       playPageTurnSound();
       setCurrentPage(currentPage + 1);
@@ -238,14 +261,19 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
         ]
       );
     }
-  };
+  }, [currentPage, totalPages, playPageTurnSound, handleExit]);
 
-  const goToPreviousPage = () => {
-    if (currentPage > 0) {
-      playPageTurnSound();
-      setCurrentPage(currentPage - 1);
-    }
-  };
+  const handleReaderTapLeft = useCallback(() => {
+    goToPreviousPage();
+  }, [goToPreviousPage]);
+
+  const handleReaderTapRight = useCallback(() => {
+    goToNextPage();
+  }, [goToNextPage]);
+
+  const handleReaderCenterTap = useCallback(() => {
+    setShowControls((visible) => !visible);
+  }, []);
 
   if (loading) {
     return (
@@ -258,11 +286,7 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
 
   return (
     <View style={[styles.container, isGrayscaleReading && styles.grayscaleContainer]}>
-      <TouchableOpacity
-        style={styles.imageContainer}
-        activeOpacity={1}
-        onPress={() => setShowControls(!showControls)}
-      >
+      <View style={styles.imageContainer}>
         {imageLoading && pageImageSource && !imageError && (
           <View style={styles.imageLoadingOverlay}>
             <ActivityIndicator size="small" color="#1976D2" />
@@ -277,41 +301,49 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
             </Button>
           </View>
         ) : pageImageSource ? (
-          <View style={[styles.pageFrame, { width: displaySize.width, height: displaySize.height }]}>
+          <ZoomablePageView
+            viewportWidth={windowWidth}
+            viewportHeight={windowHeight}
+            imageWidth={layoutNativeSize.width}
+            imageHeight={layoutNativeSize.height}
+            fitMode={fitMode}
+            zoomScale={pageZoomScale}
+            panResetKey={currentPage}
+            chromeVisible={showControls}
+            onZoomScaleChange={setPageZoomScale}
+            onZoomedChange={setIsPageZoomed}
+            onCenterTap={handleReaderCenterTap}
+            onTapLeft={handleReaderTapLeft}
+            onTapRight={handleReaderTapRight}
+          >
             <Image
               key={`${chapterId}-${currentPage}-${imageRetryKey}`}
               source={pageImageSource}
               recyclingKey={`${chapterId}-${currentPage}`}
               style={styles.pageImage}
               contentFit="contain"
+              pointerEvents="none"
               onLoad={handleImageLoad}
               onError={handleImageError}
             />
             {isGrayscaleReading && (
               <View style={styles.grayscaleOverlay} pointerEvents="none" />
             )}
-          </View>
+          </ZoomablePageView>
         ) : (
           <View style={styles.placeholderContainer}>
             <ActivityIndicator size="large" color="#1976D2" />
             <Text style={styles.placeholderText}>Loading page...</Text>
           </View>
         )}
-      </TouchableOpacity>
+      </View>
 
-      {!showControls && (
-        <>
-          <TouchableOpacity
-            style={[styles.pageTurnZone, { left: 0, width: tapZoneWidth }]}
-            onPress={goToPreviousPage}
-            activeOpacity={0.3}
-          />
-          <TouchableOpacity
-            style={[styles.pageTurnZone, { right: 0, width: tapZoneWidth }]}
-            onPress={goToNextPage}
-            activeOpacity={0.3}
-          />
-        </>
+      {showControls && (
+        <Pressable
+          style={styles.controlsDismissLayer}
+          onPress={() => setShowControls(false)}
+          accessibilityLabel="Hide reader controls"
+        />
       )}
 
       {progressSaveError ? (
@@ -394,6 +426,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#000',
   },
+  controlsDismissLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+  },
   imageLoadingOverlay: {
     position: 'absolute',
     top: 20,
@@ -402,9 +438,6 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
     zIndex: 10,
-  },
-  pageFrame: {
-    overflow: 'hidden',
   },
   pageImage: {
     width: '100%',
@@ -426,12 +459,6 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 16,
-  },
-  pageTurnZone: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    zIndex: 5,
   },
   progressErrorBanner: {
     position: 'absolute',

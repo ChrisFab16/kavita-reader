@@ -4,6 +4,7 @@ import {
   autoFitMode,
   computeDisplaySize,
   computeFitScale,
+  clampPanTranslation,
 } from './readerFit';
 import { isPdfChapter, getPageDimensionsFromChapter } from './readerChapter';
 import { MangaFormat } from '../types/kavita';
@@ -74,6 +75,21 @@ describe('isPdfChapter', () => {
       isPdfChapter({ seriesFormat: MangaFormat.Archive, fileName: 'issue.cbz' }),
       false
     );
+  });
+});
+
+describe('clampPanTranslation', () => {
+  it('clamps to zero when content fits the viewport', () => {
+    assert.deepEqual(
+      clampPanTranslation(1000, 1500, 400, 800, 'fitScreen', 1, 50, 50),
+      { x: 0, y: 0 }
+    );
+  });
+
+  it('allows vertical pan when zoomed past viewport height', () => {
+    const result = clampPanTranslation(1000, 1500, 400, 800, 'fitScreen', 2, 0, 120);
+    assert.equal(result.x, 0);
+    assert.equal(result.y, 120);
   });
 });
 
