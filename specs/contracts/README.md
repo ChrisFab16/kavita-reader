@@ -27,6 +27,11 @@
 | [kavita-series-list.md](./kavita-series-list.md) | Library series browse (`all-v2`, `v2`), attempt order, pitfalls |
 | [kavita-series-detail.md](./kavita-series-detail.md) | Series detail / volumes tree, FlatList virtualization |
 | [kavita-collections.md](./kavita-collections.md) | Collection tags and `series-by-collection` |
+| [kavita-on-deck.md](./kavita-on-deck.md) | Continue-reading shelf (draft, 014) |
+| [kavita-want-to-read.md](./kavita-want-to-read.md) | Want to read list (draft, 014) |
+| [kavita-reading-lists.md](./kavita-reading-lists.md) | Reading lists browse (draft, 014) |
+| [kavita-bookmarks.md](./kavita-bookmarks.md) | Page bookmarks (draft, 014) |
+| [kavita-ratings.md](./kavita-ratings.md) | User star ratings / starred (draft, 014) |
 | [kavita-reader-progress.md](./kavita-reader-progress.md) | Reading progress GET/POST, `ProgressDto`, page indexing |
 | [../002-auth-login-fix/contracts/auth-routes.md](../002-auth-login-fix/contracts/auth-routes.md) | Public auth routes (no Bearer) |
 

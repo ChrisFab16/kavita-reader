@@ -46,7 +46,8 @@ Active feature path: `.specify/feature.json`.
 | 009 | `specs/009-series-detail-load/` — signed off |
 | 010 | `specs/010-series-detail-search/` — **active** |
 | 011 | `specs/011-reader-zoom-gestures/` — signed off (automated) |
-| 013 | `specs/013-landscape-interface/` — **active** |
+| 013 | `specs/013-landscape-interface/` — implemented; T007 manual pending |
+| 014 | `specs/014-kavita-personal-lists/` — **active** (evaluation + phased plan) |
 
 ## Next action queue
 
