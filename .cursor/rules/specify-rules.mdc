@@ -37,13 +37,12 @@ If the user asks for a fix and no spec exists: **create the spec artifacts first
 
 ## Active feature
 
-Path: `.specify/feature.json` → currently `specs/003-app-session-bootstrap`
+Path: `.specify/feature.json` → currently `specs/014-kavita-personal-lists`
 
 | Feature | Path | Status |
 |---------|------|--------|
-| 001 Library load | `specs/001-library-load-review/` | Phase 1b — scroll re-test pending |
-| 002 Auth login | `specs/002-auth-login-fix/` | Signed off |
-| 003 Session bootstrap | `specs/003-app-session-bootstrap/` | Implemented — QA pending |
+| 013 Landscape | `specs/013-landscape-interface/` | Implemented — T007 manual pending |
+| 014 Personal lists | `specs/014-kavita-personal-lists/` | **Active** — spec/plan/analyze complete; T001 spike next |
 
 ## Spec Kit Workflow
 

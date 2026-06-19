@@ -114,7 +114,7 @@ As a reader, I want to **bookmark pages** in the comic/PDF reader and browse all
 ### Edge Cases
 
 - Server version lacks an endpoint → hide feature with version note, no crash.
-- Offline: show last cached shelf with stale banner; writes queue or fail with clear message.
+- Offline: show last cached shelf with stale banner; writes fail with clear message (no silent queue in v1).
 - Multi-server: shelves scoped to active server; switching server reloads all lists.
 - Empty permissions / 401: redirect to login, clear stale shelf data.
 

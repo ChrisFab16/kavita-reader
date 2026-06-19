@@ -1,5 +1,43 @@
 # Plan: Kavita Personal Lists & Server Sync
 
+**Branch**: `speckit-work`  
+**Spec**: [spec.md](./spec.md) · **Research**: [research.md](./research.md) · **Data model**: [data-model.md](./data-model.md)
+
+## Technical context
+
+| Area | Choice |
+|------|--------|
+| Platform | Android · Expo SDK 54 · React Native 0.81 |
+| HTTP | `KavitaClient` (axios) — extend existing class |
+| UI | React Native Paper · shelf chips on Home |
+| State | Ephemeral shelf data; Zustand `serverStore` for active client only |
+| Pagination | Reuse 007 `Pagination` header parsing, 1-based API pages |
+| Filter | Extend `kavitaFilterV2.ts` after T007 enum probe |
+| Testing | Mock axios unit tests (008 pattern); phased quickstart |
+
+## Non-functional requirements
+
+- **NFR-001 (Privacy)**: No new telemetry; all list data from user's Kavita instance.
+- **NFR-002 (Multi-server)**: Shelves scoped to active server; clear on switch.
+- **NFR-003 (Offline)**: Stale cache display + clear error on writes; no silent drop.
+- **NFR-004 (Performance)**: Paginated grids; no full-library fetch for shelves.
+- **NFR-005 (Auth)**: 401 → login flow; empty shelf ≠ silent auth failure.
+
+## Navigation map
+
+```
+Home (shelf chips)
+  → SeriesGrid [mode: onDeck | wantToRead | starred | library | collection]
+      → SeriesDetail (+ want-to-read toggle, rating P2)
+          → Reader
+ReadingLists (P2)
+  → ReadingListDetail → Reader
+Bookmarks (P3)
+  → Reader (page jump)
+```
+
+New routes in `RootStackParamList`: `SeriesGrid` (or extend `LibraryDetail` params), `ReadingListDetail`, `Bookmarks` — register in `AppNavigator` (Principle VI).
+
 ## Architecture principle
 
 **Server is source of truth.** Client holds ephemeral UI state + optional cache for offline *display* only. Every shelf mutation goes to Kavita first; optimistic UI optional but must reconcile on error.

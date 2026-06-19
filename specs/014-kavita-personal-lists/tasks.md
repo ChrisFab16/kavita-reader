@@ -3,19 +3,19 @@
 ## Phase 0 — Spike & contracts
 
 - [ ] T001 Live API probe on user's Kavita instance (on-deck, want-to-read, reading-list, bookmark, rating routes) — record in contract docs
-- [ ] T002 Add `specs/contracts/kavita-on-deck.md`
-- [ ] T003 Add `specs/contracts/kavita-want-to-read.md`
-- [ ] T004 Add `specs/contracts/kavita-reading-lists.md`
-- [ ] T005 Add `specs/contracts/kavita-bookmarks.md`
-- [ ] T006 Add `specs/contracts/kavita-ratings.md` (starred)
+- [x] T002 Add `specs/contracts/kavita-on-deck.md`
+- [x] T003 Add `specs/contracts/kavita-want-to-read.md`
+- [x] T004 Add `specs/contracts/kavita-reading-lists.md`
+- [x] T005 Add `specs/contracts/kavita-bookmarks.md`
+- [x] T006 Add `specs/contracts/kavita-ratings.md` (starred)
 - [ ] T007 Extend `kavita-filter-v2.md` with WantToRead + UserRating fields (after enum probe)
 
 ## Phase 1 — On Deck + Want to Read (P1)
 
 - [ ] T008 `kavitaClient` methods: on-deck list + remove-from-on-deck
 - [ ] T009 `kavitaClient` methods: want-to-read v2 list + add/remove + membership check
-- [ ] T010 Refactor or parametrize series grid for `onDeck` / `wantToRead` modes (reuse 007 pagination)
-- [ ] T011 Home shelf selector; On Deck + Want to Read shelves
+- [ ] T010 Refactor or parametrize series grid for `onDeck` / `wantToRead` modes (reuse 007 pagination; pull-to-refresh per FR-009)
+- [ ] T011 Home shelf selector; On Deck + Want to Read shelves (preserve 013 header search; scoped to active server)
 - [ ] T012 Series detail: Want to Read toggle with server sync
 - [ ] T013 Unit tests for new client wrappers (mock axios)
 - [ ] T014 Quickstart + validation-results Phase 1
