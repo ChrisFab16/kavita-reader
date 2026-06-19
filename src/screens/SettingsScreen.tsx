@@ -6,6 +6,8 @@ import { Text, Card, Switch, Button, IconButton, Divider, List, Chip } from 'rea
 import { useServerStore } from '../stores/serverStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useLibraryDisplayStore } from '../stores/libraryDisplayStore';
+import { useReaderSettingsStore, type PrefetchPagesOption } from '../stores/readerSettingsStore';
+import type { FitModePreference } from '../utils/readerFit';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
@@ -28,6 +30,28 @@ export default function SettingsScreen({ navigation }: Props) {
   const [expandedServers, setExpandedServers] = useState(false);
   const requestFullReload = useLibraryDisplayStore((state) => state.requestFullReload);
   const isResettingLibrary = useLibraryDisplayStore((state) => state.isResetting);
+
+  const fitModePreference = useReaderSettingsStore((state) => state.fitModePreference);
+  const setFitModePreference = useReaderSettingsStore((state) => state.setFitModePreference);
+  const prefetchPages = useReaderSettingsStore((state) => state.prefetchPages);
+  const setPrefetchPages = useReaderSettingsStore((state) => state.setPrefetchPages);
+  const cacheEntireAlbum = useReaderSettingsStore((state) => state.cacheEntireAlbum);
+  const setCacheEntireAlbum = useReaderSettingsStore((state) => state.setCacheEntireAlbum);
+  const downloadOnMobileData = useReaderSettingsStore((state) => state.downloadOnMobileData);
+  const setDownloadOnMobileData = useReaderSettingsStore((state) => state.setDownloadOnMobileData);
+
+  const fitModeOptions: { id: FitModePreference; label: string }[] = [
+    { id: 'auto', label: 'Auto' },
+    { id: 'fitScreen', label: 'Fit screen' },
+    { id: 'fitWidth', label: 'Fit width' },
+    { id: 'fitHeight', label: 'Fit height' },
+  ];
+
+  const prefetchOptions: { value: PrefetchPagesOption; label: string }[] = [
+    { value: 0, label: 'Off' },
+    { value: 2, label: '2 pages' },
+    { value: 5, label: '5 pages' },
+  ];
 
   const handleResetLibraryData = () => {
     Alert.alert(
@@ -174,6 +198,105 @@ export default function SettingsScreen({ navigation }: Props) {
                 color={theme.primary}
               />
             </View>
+          </Card.Content>
+        </Card>
+
+        {/* Reader cache & prefetch */}
+        <Card style={[styles.card, { backgroundColor: theme.surface }]}>
+          <Card.Content>
+            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.text }]}>
+              Reader cache
+            </Text>
+            <Text variant="bodySmall" style={[styles.settingDescription, { color: theme.textSecondary }]}>
+              Prefetch upcoming pages into the image cache while you read. Offline downloads are separate (long-press an album).
+            </Text>
+
+            <Text variant="labelLarge" style={{ color: theme.text, marginBottom: 8 }}>
+              Page fit
+            </Text>
+            <View style={styles.chipRow}>
+              {fitModeOptions.map((option) => (
+                <Chip
+                  key={option.id}
+                  selected={fitModePreference === option.id}
+                  onPress={() => setFitModePreference(option.id)}
+                  style={styles.settingChip}
+                >
+                  {option.label}
+                </Chip>
+              ))}
+            </View>
+
+            <Divider style={[styles.divider, { backgroundColor: theme.border }]} />
+
+            <Text variant="labelLarge" style={{ color: theme.text, marginBottom: 8 }}>
+              Prefetch ahead
+            </Text>
+            <View style={styles.chipRow}>
+              {prefetchOptions.map((option) => (
+                <Chip
+                  key={option.value}
+                  selected={prefetchPages === option.value}
+                  onPress={() => setPrefetchPages(option.value)}
+                  style={styles.settingChip}
+                >
+                  {option.label}
+                </Chip>
+              ))}
+            </View>
+
+            <Divider style={[styles.divider, { backgroundColor: theme.border }]} />
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <Text variant="bodyLarge" style={{ color: theme.text }}>
+                  Cache entire album
+                </Text>
+                <Text variant="bodySmall" style={{ color: theme.textSecondary }}>
+                  Warm all pages when you open a chapter (uses more storage and data)
+                </Text>
+              </View>
+              <Switch
+                value={cacheEntireAlbum}
+                onValueChange={setCacheEntireAlbum}
+                color={theme.primary}
+              />
+            </View>
+          </Card.Content>
+        </Card>
+
+        {/* Offline downloads */}
+        <Card style={[styles.card, { backgroundColor: theme.surface }]}>
+          <Card.Content>
+            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.text }]}>
+              Offline downloads
+            </Text>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <Text variant="bodyLarge" style={{ color: theme.text }}>
+                  Download on mobile data
+                </Text>
+                <Text variant="bodySmall" style={{ color: theme.textSecondary }}>
+                  Allow offline album downloads on cellular (default: Wi‑Fi only when detection is available)
+                </Text>
+              </View>
+              <Switch
+                value={downloadOnMobileData}
+                onValueChange={setDownloadOnMobileData}
+                color={theme.primary}
+              />
+            </View>
+
+            <Button
+              mode="outlined"
+              onPress={() => navigation.navigate('Downloads')}
+              icon="download"
+              style={styles.resetLibraryButton}
+              textColor={theme.primary}
+            >
+              Open download queue
+            </Button>
           </Card.Content>
         </Card>
 
@@ -367,6 +490,15 @@ const styles = StyleSheet.create({
   },
   resetLibraryButton: {
     alignSelf: 'flex-start',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 4,
+  },
+  settingChip: {
+    marginVertical: 2,
   },
   divider: {
     marginVertical: 12,

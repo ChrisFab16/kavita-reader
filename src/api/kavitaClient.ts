@@ -861,8 +861,16 @@ export class KavitaClient {
     }
     return {
       uri: this.getPageImageUrl(chapterId, page, options),
-      headers: { Authorization: `Bearer ${token}` },
+      headers: this.getAuthHeaders(),
     };
+  }
+
+  getAuthHeaders(): Record<string, string> {
+    const token = this.token;
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+    return { Authorization: `Bearer ${token}` };
   }
 
   async cacheImages(chapterId: number): Promise<void> {

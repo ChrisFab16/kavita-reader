@@ -8,8 +8,9 @@ import {
   Platform,
   ViewToken,
   Keyboard,
+  Alert,
 } from 'react-native';
-import { Text, ActivityIndicator, Card, Chip, IconButton, Button, Searchbar } from 'react-native-paper';
+import { Text, ActivityIndicator, Card, Chip, IconButton, Button, Searchbar, Snackbar } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import { useServerStore } from '../stores/serverStore';
@@ -26,6 +27,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { Theme } from '../utils/theme';
 import type { KavitaClient } from '../api/kavitaClient';
+import { useDownloadStore } from '../stores/downloadStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SeriesDetail'>;
 
@@ -111,6 +113,8 @@ type DetailRowProps = {
   theme: Theme;
   client: KavitaClient | null;
   onChapterPress: (volume: VolumeListItem, chapter: VolumeChapterItem) => void;
+  onChapterLongPress: (volume: VolumeListItem, chapter: VolumeChapterItem, title: string) => void;
+  downloadedChapterIds: Set<number>;
 };
 
 const DetailRow = memo(function DetailRow({
@@ -118,6 +122,8 @@ const DetailRow = memo(function DetailRow({
   theme,
   client,
   onChapterPress,
+  onChapterLongPress,
+  downloadedChapterIds,
 }: DetailRowProps) {
   const volumeCoverUrl = client ? client.getVolumeCoverUrl(row.volume.id) : '';
   const chapterCoverUrl =
@@ -151,8 +157,14 @@ const DetailRow = memo(function DetailRow({
 
   if (row.kind === 'volume-card') {
     const { chapter, volume } = row;
+    const downloaded = downloadedChapterIds.has(chapter.id);
     return (
-      <TouchableOpacity onPress={() => onChapterPress(volume, chapter)}>
+      <TouchableOpacity
+        onPress={() => onChapterPress(volume, chapter)}
+        onLongPress={() =>
+          onChapterLongPress(volume, chapter, formatVolumeTitle(volume))
+        }
+      >
         <Card style={[styles.volumeCard, { backgroundColor: theme.surface }]}>
           <Card.Content style={styles.volumeCardContent}>
             <Image
@@ -168,6 +180,11 @@ const DetailRow = memo(function DetailRow({
                 {formatVolumeTitle(volume)}
               </Text>
               <ChapterMeta chapter={chapter} theme={theme} />
+              {downloaded ? (
+                <Chip compact icon="download" style={styles.downloadedChip}>
+                  Offline
+                </Chip>
+              ) : null}
             </View>
             <IconButton
               icon="chevron-right"
@@ -183,9 +200,13 @@ const DetailRow = memo(function DetailRow({
 
   const { chapter, volume, chapterIndex } = row;
   const displayTitle = formatChapterTitle(chapter, volume, chapterIndex);
+  const downloaded = downloadedChapterIds.has(chapter.id);
 
   return (
-    <TouchableOpacity onPress={() => onChapterPress(volume, chapter)}>
+    <TouchableOpacity
+      onPress={() => onChapterPress(volume, chapter)}
+      onLongPress={() => onChapterLongPress(volume, chapter, displayTitle)}
+    >
       <Card style={[styles.chapterCard, { backgroundColor: theme.surface }]}>
         <Card.Content style={styles.chapterContent}>
           <Image
@@ -201,6 +222,11 @@ const DetailRow = memo(function DetailRow({
               {displayTitle}
             </Text>
             <ChapterMeta chapter={chapter} theme={theme} />
+            {downloaded ? (
+              <Chip compact icon="download" style={styles.downloadedChip}>
+                Offline
+              </Chip>
+            ) : null}
           </View>
           <IconButton
             icon="chevron-right"
@@ -231,8 +257,23 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [wantToRead, setWantToRead] = useState<boolean | null>(null);
   const [wantToReadBusy, setWantToReadBusy] = useState(false);
+  const [downloadSnackbar, setDownloadSnackbar] = useState<string | null>(null);
 
-  const primaryServerId = useServerStore((state) => state.primaryServerId);
+  const primaryServerId = useServerStore((state) => state.primaryServerId ?? state.servers[0]?.id ?? null);
+  const downloadJobs = useDownloadStore((state) => state.jobs);
+  const enqueueChapter = useDownloadStore((state) => state.enqueueChapter);
+
+  const downloadedChapterIds = useMemo(() => {
+    const ids = new Set<number>();
+    if (!primaryServerId) return ids;
+    for (const job of downloadJobs) {
+      if (job.serverId === primaryServerId && job.status === 'completed') {
+        ids.add(job.chapterId);
+      }
+    }
+    return ids;
+  }, [downloadJobs, primaryServerId]);
+
   const serverUrl = useServerStore((state) => {
     const id = state.primaryServerId ?? state.servers[0]?.id;
     return state.servers.find((s) => s.id === id)?.url ?? null;
@@ -372,6 +413,32 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
     }, [refreshVolumesProgress])
   );
 
+  const handleChapterLongPress = useCallback(
+    (volume: VolumeListItem, chapter: VolumeChapterItem, title: string) => {
+      if (!primaryServerId) {
+        return;
+      }
+      Alert.alert('Download for offline', title, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Download',
+          onPress: () => {
+            enqueueChapter({
+              serverId: primaryServerId,
+              seriesId,
+              chapterId: chapter.id,
+              title,
+              chapterFormat: chapter.format,
+              fileName: chapter.fileName,
+            });
+            setDownloadSnackbar('Download queued');
+          },
+        },
+      ]);
+    },
+    [primaryServerId, seriesId, enqueueChapter]
+  );
+
   const handleChapterPress = useCallback(
     (volume: VolumeListItem, chapter: VolumeChapterItem) => {
       if (!client) return;
@@ -399,9 +466,11 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
         theme={theme}
         client={client}
         onChapterPress={handleChapterPress}
+        onChapterLongPress={handleChapterLongPress}
+        downloadedChapterIds={downloadedChapterIds}
       />
     ),
-    [theme, client, handleChapterPress]
+    [theme, client, handleChapterPress, handleChapterLongPress, downloadedChapterIds]
   );
 
   const keyExtractor = useCallback((item: SeriesDetailRow) => item.key, []);
@@ -605,6 +674,13 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
       />
+      <Snackbar
+        visible={downloadSnackbar != null}
+        onDismiss={() => setDownloadSnackbar(null)}
+        duration={2500}
+      >
+        {downloadSnackbar}
+      </Snackbar>
     </View>
   );
 }
@@ -679,6 +755,10 @@ const styles = StyleSheet.create({
   wantToReadRow: {
     marginTop: 12,
     alignSelf: 'flex-start',
+  },
+  downloadedChip: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
   },
   volumeHeader: {
     flexDirection: 'row',

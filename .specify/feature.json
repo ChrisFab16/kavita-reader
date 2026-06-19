@@ -1,3 +1,4 @@
 {
-  "feature_directory": "specs/014-kavita-personal-lists"
+  "feature_directory": "specs/012-offline-comic-download",
+  "notes": "Multi-feature branch: this commit also ships 011 Phase 4 prefetch and 015 release APK naming."
 }

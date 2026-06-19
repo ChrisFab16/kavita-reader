@@ -10,6 +10,7 @@ import LibraryDetailScreen from '../screens/LibraryDetailScreen';
 import SeriesDetailScreen from '../screens/SeriesDetailScreen';
 import ReaderScreen from '../screens/ReaderScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import DownloadsScreen from '../screens/DownloadsScreen';
 import type { SeriesGridMode } from '../types/kavita';
 
 export type RootStackParamList = {
@@ -32,6 +33,7 @@ export type RootStackParamList = {
     fileName?: string;
   };
   Settings: undefined;
+  Downloads: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -107,6 +109,13 @@ export default function AppNavigator({ theme, initialRouteName = 'Connect' }: Ap
           component={SettingsScreen}
           options={{ 
             title: 'Settings',
+          }}
+        />
+        <Stack.Screen
+          name="Downloads"
+          component={DownloadsScreen}
+          options={{
+            title: 'Downloads',
           }}
         />
       </Stack.Navigator>

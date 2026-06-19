@@ -5,6 +5,7 @@ import {
   computeDisplaySize,
   computeFitScale,
   clampPanTranslation,
+  resolveReaderFitMode,
 } from './readerFit';
 import { isPdfChapter, getPageDimensionsFromChapter } from './readerChapter';
 import { MangaFormat } from '../types/kavita';
@@ -17,6 +18,16 @@ describe('autoFitMode', () => {
 
   it('uses fitScreen in portrait', () => {
     assert.equal(autoFitMode(400, 800), 'fitScreen');
+  });
+});
+
+describe('resolveReaderFitMode', () => {
+  it('honors explicit preference', () => {
+    assert.equal(resolveReaderFitMode('fitHeight', 800, 400), 'fitHeight');
+  });
+
+  it('falls back to auto when preference is auto', () => {
+    assert.equal(resolveReaderFitMode('auto', 800, 400), 'fitWidth');
   });
 });
 

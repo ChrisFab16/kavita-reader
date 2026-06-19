@@ -7,6 +7,19 @@ export function autoFitMode(viewportWidth: number, viewportHeight: number): Read
   return viewportWidth > viewportHeight ? 'fitWidth' : 'fitScreen';
 }
 
+export type FitModePreference = 'auto' | ReaderFitMode;
+
+export function resolveReaderFitMode(
+  preference: FitModePreference,
+  viewportWidth: number,
+  viewportHeight: number
+): ReaderFitMode {
+  if (preference !== 'auto') {
+    return preference;
+  }
+  return autoFitMode(viewportWidth, viewportHeight);
+}
+
 /**
  * Scale factor applied to native image pixels so the page fits the viewport per mode.
  * Multiply image width/height by this value for display dimensions.

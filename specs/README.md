@@ -45,11 +45,16 @@ Active feature path: `.specify/feature.json`.
 | 008 | `specs/008-reading-progress-sync/` — signed off |
 | 009 | `specs/009-series-detail-load/` — signed off |
 | 010 | `specs/010-series-detail-search/` — **active** |
-| 011 | `specs/011-reader-zoom-gestures/` — signed off (automated) |
+| 011 | `specs/011-reader-zoom-gestures/` — Phase 4 prefetch shipped; manual T036 pending |
+| 012 | `specs/012-offline-comic-download/` — **active** Phase 1; manual T008 pending |
 | 013 | `specs/013-landscape-interface/` — implemented; T007 manual pending |
-| 014 | `specs/014-kavita-personal-lists/` — **active** (evaluation + phased plan) |
+| 014 | `specs/014-kavita-personal-lists/` — Phase 1 shipped; T014 manual pending |
+| 015 | `specs/015-android-release-artifacts/` — release APK naming |
 
 ## Next action queue
 
-1. **010** — series detail search (T003 manual sign-off).
-2. **003 / 004** — session bootstrap + reader type manual QA.
+1. **012** — offline download Phase 1 manual quickstart (T008).
+2. **011** — reader prefetch manual quickstart (T036).
+3. **014** — personal lists Phase 1 validation (T014).
+4. **010** — series detail search (T003 manual sign-off).
+5. **003 / 004** — session bootstrap + reader type manual QA.

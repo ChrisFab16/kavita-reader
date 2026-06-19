@@ -95,3 +95,17 @@ npm start          # Expo dev server
 npm run android    # Run on Android
 eas build --platform android --profile preview   # APK
 ```
+
+### Release APK naming
+
+Local release APKs MUST be named **`{slug}-{version}.apk`** (e.g. `kavita-reader-1.0.1.apk`), not `app-release.apk`.
+
+- **Slug / version source:** `app.json` → `expo.slug`, `expo.version` (Gradle uses `versionName` from prebuild).
+- **Enforced by:** `plugins/withAndroidReleaseApkName.js` (applied on `expo prebuild`).
+- **Output path:** `android/app/build/outputs/apk/release/kavita-reader-<version>.apk`
+
+```bash
+npx expo prebuild --platform android   # if android/ missing or after plugin changes
+cd android && ./gradlew assembleRelease
+unset ANDROID_SDK_ROOT   # if Gradle reports conflicting SDK env vars (Windows/Git Bash)
+```

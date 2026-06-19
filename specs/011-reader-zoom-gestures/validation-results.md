@@ -7,7 +7,8 @@
 | 1 | 2026-06-16 | CI | pass | `npm run test:gestures` 23/23; `npm test` 57/57 |
 | 2 | 2026-06-19 | emulator-5554 | pass | Double-tap zoom in/out, 2-axis pan, L/R 20% page turn — user sign-off |
 | 3 | | | | |
-| 4 | | | | |
+| 4 (automated) | 2026-06-19 | CI | pass | T027–T034: `npm test` 77/77; prefetch + settings store + `chapterPageAssets` |
+| 4 (manual) | | | pending | T036 quickstart; T033 reduce-motion deferred |
 | 5 | | | | |
 
 ## Open questions resolution

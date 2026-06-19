@@ -18,7 +18,11 @@ import { useServerStore } from '../stores/serverStore';
 import { useThemeStore } from '../stores/themeStore';
 import { exitReader, readerChromeOverlay } from '../utils/readerNavigation';
 import { buildProgressPayload } from '../utils/readingProgress';
-import { autoFitMode } from '../utils/readerFit';
+import { resolveReaderFitMode } from '../utils/readerFit';
+import { getPageWarmIndices } from '../utils/chapterPageAssets';
+import { createReaderPrefetchRunner } from '../utils/readerPagePrefetch';
+import { resolveOfflinePageUri } from '../services/offlineChapterStorage';
+import { useReaderSettingsStore } from '../stores/readerSettingsStore';
 import { getPageDimensionsFromChapter, isPdfChapter } from '../utils/readerChapter';
 import ZoomablePageView from '../components/reader/ZoomablePageView';
 import type { ChapterInfoDto, ProgressDto } from '../types/kavita';
@@ -48,12 +52,23 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   const client = useServerStore((state) => state.getActiveClient());
+  const primaryServerId = useServerStore(
+    (state) => state.primaryServerId ?? state.servers[0]?.id ?? null
+  );
+  const fitModePreference = useReaderSettingsStore((state) => state.fitModePreference);
+  const prefetchPages = useReaderSettingsStore((state) => state.prefetchPages);
+  const cacheEntireAlbum = useReaderSettingsStore((state) => state.cacheEntireAlbum);
   const isGrayscaleReading = useThemeStore((state) => state.isGrayscaleReading);
   const pageTurnSoundsEnabled = useThemeStore((state) => state.pageTurnSoundsEnabled);
 
-  const fitMode = autoFitMode(windowWidth, windowHeight);
+  const fitMode = resolveReaderFitMode(fitModePreference, windowWidth, windowHeight);
 
-  const pageImageSource = useMemo((): PageImageAuthSource | null => {
+  const [localPageUri, setLocalPageUri] = useState<string | null>(null);
+
+  const pageImageSource = useMemo((): PageImageAuthSource | { uri: string } | null => {
+    if (localPageUri) {
+      return { uri: localPageUri };
+    }
     if (!client || !chapterInfo) {
       return null;
     }
@@ -64,7 +79,7 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
     } catch {
       return null;
     }
-  }, [client, chapterInfo, chapterId, currentPage]);
+  }, [localPageUri, client, chapterInfo, chapterId, currentPage]);
 
   const knownPageSize = useMemo(() => {
     if (!chapterInfo) {
@@ -116,6 +131,38 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
     setPageZoomScale(1);
     setIsPageZoomed(false);
   }, [chapterId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!primaryServerId) {
+      setLocalPageUri(null);
+      return;
+    }
+    void resolveOfflinePageUri(primaryServerId, chapterId, currentPage).then((uri) => {
+      if (!cancelled) {
+        setLocalPageUri(uri);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [primaryServerId, chapterId, currentPage]);
+
+  useEffect(() => {
+    if (!client || !chapterInfo || totalPages <= 0) {
+      return;
+    }
+    const indices = getPageWarmIndices(currentPage, totalPages, {
+      prefetchPages,
+      cacheEntireAlbum,
+    });
+    const runner = createReaderPrefetchRunner();
+    void runner.warm(client, chapterId, chapterInfo, indices, {
+      prefetchPages,
+      cacheEntireAlbum,
+    });
+    return () => runner.cancel();
+  }, [client, chapterId, chapterInfo, currentPage, totalPages, prefetchPages, cacheEntireAlbum]);
 
   const loadSound = async () => {
     try {

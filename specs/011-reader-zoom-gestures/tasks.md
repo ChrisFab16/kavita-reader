@@ -55,14 +55,14 @@
 
 ## Phase 4 — Settings, prefetch & polish
 
-- [ ] **T027** Add `readerSettingsStore` (or extend theme store): `fitMode`, `prefetchPages`, `cacheEntireAlbum`, persisted
-- [ ] **T028** Settings UI: fit mode selector + prefetch switches (**Constitution VII**)
-- [ ] **T029** Create `readerPagePrefetch.ts`: warm N ahead, concurrency cap, cancel on unmount
-- [ ] **T030** Hook prefetch on `currentPage` change; use `Image.prefetch` with auth headers
-- [ ] **T031** Full-album mode: queue all pages with bounded parallelism when enabled
-- [ ] **T032** Respect `fitMode` Settings override over auto landscape/portrait (**Q7**)
+- [x] **T027** Add `readerSettingsStore` (or extend theme store): `fitMode`, `prefetchPages`, `cacheEntireAlbum`, persisted
+- [x] **T028** Settings UI: fit mode selector + prefetch switches (**Constitution VII**)
+- [x] **T029** Create `readerPagePrefetch.ts`: warm N ahead, concurrency cap, cancel on unmount
+- [x] **T030** Hook prefetch on `currentPage` change; use `Image.prefetch` with auth headers
+- [x] **T031** Full-album mode: queue all pages with bounded parallelism when enabled
+- [x] **T032** Respect `fitMode` Settings override over auto landscape/portrait (**Q7**)
 - [ ] **T033** Reduce-motion: shorten/disable zoom animation when system requests
-- [ ] **T034** Unit/integration tests for prefetch window logic (mock client)
+- [x] **T034** Unit/integration tests for prefetch window logic (mock client)
 - [ ] **T035** Trim verbose `console.log` in reader hot path (minor hygiene)
 - [ ] **T036** Manual quickstart (see [quickstart.md](./quickstart.md))
 - [ ] **T037** Record results in `validation-results.md`
