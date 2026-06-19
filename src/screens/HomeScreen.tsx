@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, useWindowDimensions } from 'react-native';
-import { Text, Card, ActivityIndicator, Searchbar, IconButton } from 'react-native-paper';
+import { Text, Card, ActivityIndicator, Searchbar, IconButton, Chip } from 'react-native-paper';
+import type { SeriesGridMode } from '../types/kavita';
 import { useServerStore } from '../stores/serverStore';
 import { useThemeStore } from '../stores/themeStore';
 import { createScreenLogger } from '../utils/debugLogger';
@@ -12,6 +13,15 @@ import { getHomeCardWidth, isLandscape } from '../utils/responsiveLayout';
 import type { CollectionTagDto } from '../types/kavita';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
+
+type HomeShelf = 'onDeck' | 'libraries' | 'collections' | 'wantToRead';
+
+const HOME_SHELVES: { id: HomeShelf; label: string; gridMode?: SeriesGridMode; screenTitle: string }[] = [
+  { id: 'onDeck', label: 'On Deck', gridMode: 'onDeck', screenTitle: 'On Deck' },
+  { id: 'libraries', label: 'Libraries' },
+  { id: 'collections', label: 'Collections' },
+  { id: 'wantToRead', label: 'Want to Read', gridMode: 'wantToRead', screenTitle: 'Want to Read' },
+];
 
 const logger = createScreenLogger('HomeScreen');
 
@@ -42,6 +52,9 @@ export default function HomeScreen({ navigation }: Props) {
     logger.state('Initializing searchQuery', '');
     return '';
   });
+
+  const [activeShelf, setActiveShelf] = useState<HomeShelf>('libraries');
+  const defaultShelfChecked = useRef(false);
   
   logger.state('Current state', { 
     librariesCount: libraries.length, 
@@ -118,6 +131,38 @@ export default function HomeScreen({ navigation }: Props) {
       logger.effect('Component unmounting');
     };
   }, [loadLibraries]);
+
+  useEffect(() => {
+    if (!client || defaultShelfChecked.current) return;
+    defaultShelfChecked.current = true;
+    void (async () => {
+      try {
+        const { result } = await client.getOnDeckList(0, 1);
+        if (result.length > 0) {
+          setActiveShelf('onDeck');
+          navigation.navigate('LibraryDetail', {
+            gridMode: 'onDeck',
+            libraryName: 'On Deck',
+          });
+        }
+      } catch {
+        // On deck unavailable — stay on libraries
+      }
+    })();
+  }, [client, navigation]);
+
+  const openPersonalShelf = useCallback(
+    (shelf: (typeof HOME_SHELVES)[number]) => {
+      setActiveShelf(shelf.id);
+      if (shelf.gridMode) {
+        navigation.navigate('LibraryDetail', {
+          gridMode: shelf.gridMode,
+          libraryName: shelf.screenTitle ?? shelf.label,
+        });
+      }
+    },
+    [navigation]
+  );
 
   const handleRefresh = useCallback(() => {
     loadLibraries({ refresh: true });
@@ -198,7 +243,11 @@ export default function HomeScreen({ navigation }: Props) {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {searchOpen ? (
         <Searchbar
-          placeholder="Search libraries and collections..."
+          placeholder={
+            activeShelf === 'collections'
+              ? 'Search collections...'
+              : 'Search libraries...'
+          }
           onChangeText={(text) => {
             logger.user('Search query changed', text);
             lastRenderReason.current = 'search-changed';
@@ -214,6 +263,30 @@ export default function HomeScreen({ navigation }: Props) {
       ) : null}
 
       <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.shelfChipRow}
+        contentContainerStyle={styles.shelfChipContent}
+      >
+        {HOME_SHELVES.map((shelf) => (
+          <Chip
+            key={shelf.id}
+            selected={activeShelf === shelf.id}
+            onPress={() => openPersonalShelf(shelf)}
+            style={[
+              styles.shelfChip,
+              {
+                backgroundColor: activeShelf === shelf.id ? theme.primaryLight : theme.surface,
+              },
+            ]}
+            textStyle={{ color: activeShelf === shelf.id ? '#fff' : theme.text }}
+          >
+            {shelf.label}
+          </Chip>
+        ))}
+      </ScrollView>
+
+      <ScrollView
         style={styles.content}
         contentContainerStyle={compactLayout ? styles.contentCompact : undefined}
         refreshControl={
@@ -226,6 +299,8 @@ export default function HomeScreen({ navigation }: Props) {
         }
       >
         <View style={[styles.section, compactLayout && styles.sectionCompact]}>
+          {activeShelf === 'libraries' ? (
+          <>
           <Text variant={compactLayout ? 'titleMedium' : 'titleLarge'} style={[styles.sectionTitle, compactLayout && styles.sectionTitleCompact, { color: theme.text }]}>
             Libraries
           </Text>
@@ -282,9 +357,11 @@ export default function HomeScreen({ navigation }: Props) {
               })}
             </View>
           )}
-        </View>
+          </>
+          ) : null}
 
-        <View style={[styles.section, compactLayout && styles.sectionCompact]}>
+          {activeShelf === 'collections' ? (
+          <>
           <Text variant={compactLayout ? 'titleMedium' : 'titleLarge'} style={[styles.sectionTitle, compactLayout && styles.sectionTitleCompact, { color: theme.text }]}>
             Collections
           </Text>
@@ -336,6 +413,21 @@ export default function HomeScreen({ navigation }: Props) {
               ))}
             </View>
           )}
+          </>
+          ) : null}
+
+          {(activeShelf === 'onDeck' || activeShelf === 'wantToRead') ? (
+            <Card style={[styles.emptyCard, { backgroundColor: theme.surface }]}>
+              <Card.Content>
+                <Text variant="titleMedium" style={{ color: theme.text }}>
+                  {activeShelf === 'onDeck' ? 'On Deck' : 'Want to Read'}
+                </Text>
+                <Text variant="bodyMedium" style={[styles.emptyText, { color: theme.textSecondary }]}>
+                  Tap the chip again to open your {activeShelf === 'onDeck' ? 'continue reading' : 'want to read'} shelf.
+                </Text>
+              </Card.Content>
+            </Card>
+          ) : null}
         </View>
       </ScrollView>
     </View>
@@ -359,6 +451,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 4,
     elevation: 0,
+  },
+  shelfChipRow: {
+    maxHeight: 48,
+    marginBottom: 4,
+  },
+  shelfChipContent: {
+    paddingHorizontal: 12,
+    gap: 8,
+    alignItems: 'center',
+  },
+  shelfChip: {
+    marginVertical: 4,
   },
   content: {
     flex: 1,

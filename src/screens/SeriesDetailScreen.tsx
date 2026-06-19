@@ -229,6 +229,8 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
   const [loadingVolumes, setLoadingVolumes] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [wantToRead, setWantToRead] = useState<boolean | null>(null);
+  const [wantToReadBusy, setWantToReadBusy] = useState(false);
 
   const primaryServerId = useServerStore((state) => state.primaryServerId);
   const serverUrl = useServerStore((state) => {
@@ -251,6 +253,44 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
   rowsRef.current = rows;
   const clientRef = useRef(client);
   clientRef.current = client;
+
+  const loadWantToReadState = useCallback(async () => {
+    if (!client) {
+      setWantToRead(null);
+      return;
+    }
+    try {
+      const inList = await client.isInWantToRead(seriesId);
+      setWantToRead(inList);
+    } catch {
+      setWantToRead(null);
+    }
+  }, [client, seriesId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadWantToReadState();
+    }, [loadWantToReadState])
+  );
+
+  const handleWantToReadToggle = useCallback(async () => {
+    if (!client || wantToReadBusy || wantToRead == null) return;
+    setWantToReadBusy(true);
+    try {
+      if (wantToRead) {
+        await client.removeFromWantToRead([seriesId]);
+        setWantToRead(false);
+      } else {
+        await client.addToWantToRead([seriesId]);
+        setWantToRead(true);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update Want to Read';
+      setError(message);
+    } finally {
+      setWantToReadBusy(false);
+    }
+  }, [client, wantToRead, wantToReadBusy, seriesId]);
 
   const loadSeriesDetails = useCallback(async () => {
     if (!client) {
@@ -449,10 +489,24 @@ export default function SeriesDetailScreen({ route, navigation }: Props) {
               </Chip>
             </View>
           ) : null}
+          {wantToRead != null ? (
+            <View style={styles.wantToReadRow}>
+              <Button
+                mode={wantToRead ? 'contained' : 'outlined'}
+                icon={wantToRead ? 'bookmark' : 'bookmark-outline'}
+                loading={wantToReadBusy}
+                disabled={wantToReadBusy}
+                onPress={() => void handleWantToReadToggle()}
+                compact
+              >
+                Want to Read
+              </Button>
+            </View>
+          ) : null}
         </View>
       </View>
     );
-  }, [series, volumes.length, theme, client, seriesId]);
+  }, [series, volumes.length, theme, client, seriesId, wantToRead, wantToReadBusy, handleWantToReadToggle]);
 
   const ListFooter = useCallback(() => {
     if (!loadingVolumes) return null;
@@ -621,6 +675,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginTop: 8,
+  },
+  wantToReadRow: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
   },
   volumeHeader: {
     flexDirection: 'row',

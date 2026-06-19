@@ -69,6 +69,8 @@ export interface PaginatedSeriesResult {
   pagination: PaginationMetadata | null;
 }
 
+export type SeriesGridMode = 'library' | 'collection' | 'onDeck' | 'wantToRead';
+
 export interface CollectionTagDto {
   id: number;
   title: string;

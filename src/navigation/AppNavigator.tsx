@@ -10,12 +10,18 @@ import LibraryDetailScreen from '../screens/LibraryDetailScreen';
 import SeriesDetailScreen from '../screens/SeriesDetailScreen';
 import ReaderScreen from '../screens/ReaderScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import type { SeriesGridMode } from '../types/kavita';
 
 export type RootStackParamList = {
   Connect: undefined;
   Login: { serverUrl: string };
   Home: undefined;
-  LibraryDetail: { libraryId?: number; libraryName: string; collectionId?: number };
+  LibraryDetail: {
+    libraryId?: number;
+    libraryName: string;
+    collectionId?: number;
+    gridMode?: SeriesGridMode;
+  };
   SeriesDetail: { seriesId: number; seriesName?: string; seriesSummary?: string };
   Reader: {
     chapterId: number;

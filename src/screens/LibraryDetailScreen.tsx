@@ -1,6 +1,6 @@
 // src/screens/LibraryDetailScreen.tsx
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Keyboard, RefreshControl, ScrollView, Platform, ViewToken, BackHandler, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, Keyboard, RefreshControl, ScrollView, Platform, ViewToken, BackHandler, useWindowDimensions, Alert } from 'react-native';
 import { Text, ActivityIndicator, Card, Searchbar, Chip, Button } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useServerStore } from '../stores/serverStore';
@@ -19,6 +19,7 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 import ScreenHeaderActions from '../components/ScreenHeaderActions';
 import { useLibraryReloadOnFocus } from '../hooks/useLibraryReloadOnFocus';
 import { chunkIntoRows, getBrowseGridMetrics, isLandscape } from '../utils/responsiveLayout';
+import { resolveSeriesGridMode } from '../api/kavitaPersonalLists';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LibraryDetail'>;
 
@@ -30,6 +31,7 @@ type SeriesCardProps = {
   item: SeriesDto;
   coverUrl: string;
   onPress: (item: SeriesDto) => void;
+  onLongPress?: (item: SeriesDto) => void;
   theme: Theme;
   placeholderColor: string;
   cardWidth: number;
@@ -41,6 +43,7 @@ const SeriesCard = memo(function SeriesCard({
   item,
   coverUrl,
   onPress,
+  onLongPress,
   theme,
   placeholderColor,
   cardWidth,
@@ -54,6 +57,7 @@ const SeriesCard = memo(function SeriesCard({
     <TouchableOpacity
       style={{ width: cardWidth, height: coverHeight + infoHeight }}
       onPress={() => onPress(item)}
+      onLongPress={onLongPress ? () => onLongPress(item) : undefined}
       activeOpacity={0.7}
     >
       <Card style={[styles.card, { backgroundColor: theme.surface }]}>
@@ -96,11 +100,16 @@ const SeriesCard = memo(function SeriesCard({
 });
 
 export default function LibraryDetailScreen({ route, navigation }: Props) {
-  const { libraryId, libraryName, collectionId } = route.params;
+  const { libraryId, libraryName, collectionId, gridMode: gridModeParam } = route.params;
+  const gridMode = resolveSeriesGridMode({ gridMode: gridModeParam, collectionId, libraryId });
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const gridMetrics = useMemo(() => getBrowseGridMetrics(windowWidth), [windowWidth]);
   const compactLayout = isLandscape(windowWidth, windowHeight);
-  const isCollection = collectionId != null;
+  const isCollection = gridMode === 'collection';
+  const isOnDeck = gridMode === 'onDeck';
+  const isWantToRead = gridMode === 'wantToRead';
+  const isPersonalShelf = isOnDeck || isWantToRead;
+  const showSortChips = gridMode === 'library';
   const [searchOpen, setSearchOpen] = useState(false);
   const [series, setSeries] = useState<SeriesDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -156,12 +165,18 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
       if (!client) {
         throw new Error('Not connected to a server. Go back and sign in again.');
       }
+      if (isOnDeck) {
+        return client.getOnDeckList(pageNumber, PAGE_SIZE, { noCache });
+      }
+      if (isWantToRead) {
+        return client.getWantToReadList(pageNumber, PAGE_SIZE, { noCache });
+      }
       if (isCollection) {
-        return client.getSeriesByCollectionList(collectionId, pageNumber, PAGE_SIZE, { noCache });
+        return client.getSeriesByCollectionList(collectionId!, pageNumber, PAGE_SIZE, { noCache });
       }
       return client.getSeriesList(libraryId!, pageNumber, PAGE_SIZE, { noCache, sortBy });
     },
-    [client, collectionId, isCollection, libraryId, sortBy]
+    [client, collectionId, isCollection, isOnDeck, isWantToRead, libraryId, sortBy]
   );
 
   const loadSeries = useCallback(async (options?: { refresh?: boolean; reset?: boolean; page?: number; append?: boolean }) => {
@@ -170,8 +185,16 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
     const append = options?.append === true;
     const pageNumber = options?.page ?? 0;
 
-    if (libraryId == null && collectionId == null) {
-      setError('Missing library or collection.');
+    if (gridMode === 'library' && libraryId == null) {
+      setError('Missing library.');
+      setLoading(false);
+      setRefreshing(false);
+      setLoadingMore(false);
+      loadingMoreRef.current = false;
+      return;
+    }
+    if (gridMode === 'collection' && collectionId == null) {
+      setError('Missing collection.');
       setLoading(false);
       setRefreshing(false);
       setLoadingMore(false);
@@ -274,7 +297,7 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     loadSeriesRef.current();
-  }, [libraryId, collectionId, sortBy]);
+  }, [libraryId, collectionId, sortBy, gridMode]);
 
   const handleRefresh = useCallback(() => {
     loadSeriesRef.current({ refresh: true, page: 0 });
@@ -398,6 +421,35 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
     });
   }, [seriesRows.length, client]);
 
+  const handleRemoveFromOnDeck = useCallback(
+    (item: SeriesDto) => {
+      if (!client) return;
+      Alert.alert(
+        'Remove from On Deck',
+        `Remove "${item.name}" from On Deck until you read it again?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                try {
+                  await client.removeFromOnDeck(item.id);
+                  setSeries((prev) => prev.filter((s) => s.id !== item.id));
+                } catch (err: unknown) {
+                  const message = err instanceof Error ? err.message : 'Failed to remove from On Deck';
+                  setError(message);
+                }
+              })();
+            },
+          },
+        ]
+      );
+    },
+    [client]
+  );
+
   const handleSeriesPress = useCallback((item: SeriesDto) => {
     navigation.navigate('SeriesDetail', {
       seriesId: item.id,
@@ -414,6 +466,7 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
           item={item}
           coverUrl={getCoverUrl(item.id)}
           onPress={handleSeriesPress}
+          onLongPress={isOnDeck ? handleRemoveFromOnDeck : undefined}
           theme={theme}
           placeholderColor={theme.border}
           cardWidth={gridMetrics.cardWidth}
@@ -427,7 +480,7 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
           ))
         : null}
     </View>
-  ), [getCoverUrl, handleSeriesPress, theme, gridMetrics]);
+  ), [getCoverUrl, handleSeriesPress, handleRemoveFromOnDeck, isOnDeck, theme, gridMetrics]);
 
   const rowKeyExtractor = useCallback(
     (row: SeriesRow) => row.map((item) => item.id).join('-'),
@@ -454,6 +507,12 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
     );
   }, [loadingMore, theme.primary]);
 
+  const emptyShelfMessage = useMemo(() => {
+    if (isOnDeck) return 'Nothing on deck — start reading a series to see it here.';
+    if (isWantToRead) return 'No series marked Want to Read on your Kavita server.';
+    return `${libraryName} appears empty on the server.`;
+  }, [isOnDeck, isWantToRead, libraryName]);
+
   const showInitialLoader = loading && series.length === 0;
   const showInitialError = !loading && error != null && series.length === 0;
 
@@ -471,9 +530,17 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
         </Text>
       ) : null}
 
+      {isOnDeck && !compactLayout ? (
+        <Text variant="bodySmall" style={[styles.collectionHint, { color: theme.textSecondary }]}>
+          Continue reading — long-press a series to remove from On Deck.
+        </Text>
+      ) : null}
+
       {searchOpen ? (
         <Searchbar
-          placeholder="Search in library..."
+          placeholder={
+            isPersonalShelf ? 'Search shelf...' : isCollection ? 'Search collection...' : 'Search in library...'
+          }
           onChangeText={setSearchQuery}
           value={searchQuery}
           style={[styles.searchBarCompact, { backgroundColor: theme.surface }]}
@@ -485,6 +552,7 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
         />
       ) : null}
 
+      {showSortChips ? (
       <View style={[styles.filterRow, compactLayout && styles.filterRowCompact]}>
         <Chip
           selected={sortBy === 'name'}
@@ -509,6 +577,7 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
           Recently Added
         </Chip>
       </View>
+      ) : null}
 
       {showInitialLoader ? (
         <View style={styles.centerContainer}>
@@ -544,7 +613,7 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
             {searchQuery
               ? 'Try a different search term'
               : series.length === 0
-                ? `${libraryName} appears empty on the server.`
+                ? emptyShelfMessage
                 : 'No matches for your search.'}
           </Text>
         </ScrollView>

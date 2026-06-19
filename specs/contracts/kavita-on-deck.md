@@ -1,6 +1,6 @@
 # Contract: Kavita On Deck
 
-**Status**: Draft — verify paths on live server (T001)
+**Status**: Verified (Phase 1 spike — see `specs/014-kavita-personal-lists/api-spike-results.md`)
 
 On Deck is Kavita's "continue reading" shelf: series with reading progress subject to server rules (`OnDeckProgressDays`, `OnDeckUpdateDays`) minus user removals.
 

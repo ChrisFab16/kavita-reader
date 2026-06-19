@@ -12,6 +12,12 @@ import {
 import { filterSeriesForLibrary, hasCrossLibrarySeries } from '../utils/seriesLibraryFilter';
 import { parsePaginationHeader } from '../utils/kavitaPagination';
 import { buildLibraryFilterBody } from './kavitaFilterV2';
+import {
+  buildOnDeckQueryParams,
+  buildWantToReadFilterBody,
+  buildWantToReadUpdateBody,
+  KAVITA_PERSONAL_LIST_PATHS,
+} from './kavitaPersonalLists';
 import type { LibrarySortMode } from '../utils/seriesPagination';
 import {
   extractApiErrorMessage,
@@ -516,6 +522,93 @@ export class KavitaClient {
   ): Promise<SeriesDto[]> {
     const { result } = await this.getSeriesByCollectionList(collectionId, pageNumber, pageSize, options);
     return result;
+  }
+
+  /** Paginated on-deck (continue reading) shelf. */
+  async getOnDeckList(
+    pageNumber: number = 0,
+    pageSize: number = 100,
+    options?: { noCache?: boolean; libraryId?: number }
+  ): Promise<PaginatedSeriesResult> {
+    try {
+      const response = await this.client.post(
+        KAVITA_PERSONAL_LIST_PATHS.onDeck,
+        {},
+        {
+          params: buildOnDeckQueryParams(pageNumber, pageSize, options?.libraryId),
+          headers: this.noCacheHeaders(options?.noCache),
+        }
+      );
+      return this.parseSeriesListResponse(response.data, response.headers);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /** Hide series from on-deck until next read event on server. */
+  async removeFromOnDeck(seriesId: number): Promise<void> {
+    try {
+      await this.client.post(KAVITA_PERSONAL_LIST_PATHS.removeFromOnDeck, null, {
+        params: { seriesId },
+      });
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /** Paginated want-to-read list (FilterV2 v2 endpoint). */
+  async getWantToReadList(
+    pageNumber: number = 0,
+    pageSize: number = 100,
+    options?: { noCache?: boolean }
+  ): Promise<PaginatedSeriesResult> {
+    try {
+      const response = await this.client.post(
+        KAVITA_PERSONAL_LIST_PATHS.wantToReadV2,
+        buildWantToReadFilterBody(),
+        {
+          params: buildOnDeckQueryParams(pageNumber, pageSize),
+          headers: this.noCacheHeaders(options?.noCache),
+        }
+      );
+      return this.parseSeriesListResponse(response.data, response.headers);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async addToWantToRead(seriesIds: number[]): Promise<void> {
+    try {
+      await this.client.post(
+        KAVITA_PERSONAL_LIST_PATHS.wantToReadAdd,
+        buildWantToReadUpdateBody(seriesIds)
+      );
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async removeFromWantToRead(seriesIds: number[]): Promise<void> {
+    try {
+      await this.client.post(
+        KAVITA_PERSONAL_LIST_PATHS.wantToReadRemove,
+        buildWantToReadUpdateBody(seriesIds)
+      );
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /** Whether the active user has marked the series want-to-read. */
+  async isInWantToRead(seriesId: number): Promise<boolean> {
+    try {
+      const response = await this.client.get(KAVITA_PERSONAL_LIST_PATHS.wantToReadCheck, {
+        params: { seriesId },
+      });
+      return Boolean(response.data);
+    } catch (error) {
+      throw this.handleError(error);
+    }
   }
 
   async getSeriesById(seriesId: number): Promise<any> {

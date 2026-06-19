@@ -2,7 +2,7 @@
 
 | Phase | Date | Device | Result | Notes |
 |-------|------|--------|--------|-------|
-| 0 spike | | | pending | T001 API probe |
-| 1 | | | pending | On Deck + Want to Read |
+| 0 spike | 2026-06-19 | docs | pass | api-spike-results.md from OpenAPI/kavita-client |
+| 1 | | | pending | T014 manual quickstart |
 | 2 | | | pending | Starred + Reading Lists |
 | 3 | | | pending | Bookmarks |

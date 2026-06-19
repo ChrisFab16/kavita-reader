@@ -1,6 +1,6 @@
 # Contract: Kavita Want to Read
 
-**Status**: Draft — verify on live server (T001)
+**Status**: Verified (Phase 1 spike — see `specs/014-kavita-personal-lists/api-spike-results.md`)
 
 Per-user list of series marked "Want to Read". Distinct from On Deck and Reading Lists.
 
