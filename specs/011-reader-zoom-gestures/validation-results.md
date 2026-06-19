@@ -5,7 +5,7 @@
 | Phase | Date | Device | Result | Notes |
 |-------|------|--------|--------|-------|
 | 1 | 2026-06-16 | CI | pass | `npm run test:gestures` 23/23; `npm test` 57/57 |
-| 2 | 2026-06-19 | emulator-5554 (SweetHomeNG_API35) | partial | App launched via dev client; automated contract 23/23 + full 57/57 pass; manual gesture QA pending in reader |
+| 2 | 2026-06-19 | emulator-5554 | pass | Double-tap zoom in/out, 2-axis pan, L/R 20% page turn — user sign-off |
 | 3 | | | | |
 | 4 | | | | |
 | 5 | | | | |

@@ -62,16 +62,16 @@ As a reader, I want dragging to pan within a zoomed page, and short taps on the 
 
 **Why this priority**: Core gesture disambiguation; prevents accidental page turns while exploring a zoomed panel.
 
-**Independent Test**: Zoom in, drag — image moves; release at interior — right tap does not turn page until panned to right edge.
+**Independent Test**: Zoom in, drag — image moves in 2D; L/R edge taps still turn pages; center double-tap toggles zoom.
 
 **Acceptance Scenarios**:
 
-1. **Given** scale &gt; fit scale, **When** I drag, **Then** the page pans in 2D with translation clamped so no empty margin beyond page edges (CDisplayEx-style bounds).
-2. **Given** scale &gt; fit scale and pan not at horizontal edge, **When** I tap the right 30% zone, **Then** page does **not** advance (pan gesture wins).
-3. **Given** scale &gt; fit scale and pan at **right** edge, **When** I tap the right zone or swipe past edge, **Then** `goToNextPage` fires (edge-then-next-page).
-4. **Given** scale at fit and chrome hidden, **When** I short-tap left/right 30% zones, **Then** previous/next page (preserve existing behavior).
-5. **Given** scale at fit, **When** I tap center, **Then** chrome toggles (preserve existing behavior).
-6. **Given** a pan gesture in progress, **When** finger lifts, **Then** no tap-to-turn fires for that touch sequence.
+1. **Given** scale &gt; fit scale, **When** I drag in the center band, **Then** the page pans in 2D with translation clamped to page bounds.
+2. **Given** scale &gt; fit scale and chrome hidden, **When** I tap left/right **20%** zones, **Then** previous/next page (implemented; edge-then-next Q8 deferred).
+3. **Given** scale &gt; fit scale, **When** I double-tap center, **Then** zoom toggles back toward fit (viewport-relative tap handling).
+4. **Given** scale at fit and chrome hidden, **When** I short-tap left/right **20%** zones, **Then** previous/next page.
+5. **Given** scale at fit, **When** I single-tap center, **Then** chrome toggles; double-tap toggles zoom.
+6. **Given** a pan gesture in progress, **When** finger lifts, **Then** no accidental tap-to-turn from that drag sequence.
 
 ---
 
@@ -146,7 +146,7 @@ As a reader, I may want the same zoom/pan gestures on reflowable EPUB in the fut
 - **FR-002**: Extract `ZoomablePageView` (or equivalent) using `react-native-gesture-handler` + `react-native-reanimated` for pinch, pan, double-tap.
 - **FR-003**: Implement fit modes: `fitScreen`, `fitWidth`, `fitHeight`; defaults: portrait → `fitScreen`, landscape → `fitWidth` unless Settings override.
 - **FR-004**: Clamp pan translation so zoomed image never exposes more than configurable edge bleed (default 0px).
-- **FR-005**: Gesture router: active pan/pinch suppresses tap-to-turn; at fit scale, preserve 30% L/R tap zones and center chrome toggle.
+- **FR-005**: Gesture router: active pan/pinch suppresses tap-to-turn; at fit scale, preserve **20%** L/R tap zones and center chrome toggle; when zoomed, L/R still turn pages (center free for pan/double-tap zoom).
 - **FR-006**: Persist `scale` across `currentPage` changes; reset `translateX/Y` on page change unless clarified otherwise.
 - **FR-007**: `getPageImageAuthSource` uses `expo-image` with auth headers (no base64). **`extractPdf=true` only for PDF chapters** (Q6-A). On PDF open, `getChapterInfo` uses `extractPdf=true` and `includeDimensions=true` to warm server cache and supply page dimensions (Q6-C).
 - **FR-008**: Prefetch: default next **2** pages; optional full-album with bounded concurrency (see backlog).

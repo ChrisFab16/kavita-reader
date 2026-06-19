@@ -8,11 +8,30 @@ type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList>;
   onRefresh: () => void;
   refreshing?: boolean;
+  showSettings?: boolean;
+  searchActive?: boolean;
+  onSearchPress?: () => void;
 };
 
-export default function ScreenHeaderActions({ navigation, onRefresh, refreshing = false }: Props) {
+export default function ScreenHeaderActions({
+  navigation,
+  onRefresh,
+  refreshing = false,
+  showSettings = true,
+  searchActive = false,
+  onSearchPress,
+}: Props) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      {onSearchPress ? (
+        <IconButton
+          icon={searchActive ? 'close' : 'magnify'}
+          iconColor="#fff"
+          size={24}
+          onPress={onSearchPress}
+          accessibilityLabel={searchActive ? 'Close search' : 'Search'}
+        />
+      ) : null}
       <IconButton
         icon="refresh"
         iconColor="#fff"
@@ -21,13 +40,15 @@ export default function ScreenHeaderActions({ navigation, onRefresh, refreshing 
         onPress={onRefresh}
         accessibilityLabel="Refresh"
       />
-      <IconButton
-        icon="cog"
-        iconColor="#fff"
-        size={24}
-        onPress={() => navigation.navigate('Settings')}
-        accessibilityLabel="Settings"
-      />
+      {showSettings ? (
+        <IconButton
+          icon="cog"
+          iconColor="#fff"
+          size={24}
+          onPress={() => navigation.navigate('Settings')}
+          accessibilityLabel="Settings"
+        />
+      ) : null}
     </View>
   );
 }

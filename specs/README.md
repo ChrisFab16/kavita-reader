@@ -45,6 +45,8 @@ Active feature path: `.specify/feature.json`.
 | 008 | `specs/008-reading-progress-sync/` — signed off |
 | 009 | `specs/009-series-detail-load/` — signed off |
 | 010 | `specs/010-series-detail-search/` — **active** |
+| 011 | `specs/011-reader-zoom-gestures/` — signed off (automated) |
+| 013 | `specs/013-landscape-interface/` — **active** |
 
 ## Next action queue
 

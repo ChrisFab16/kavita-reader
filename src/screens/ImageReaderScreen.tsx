@@ -92,7 +92,6 @@ export default function ImageReaderScreen({ route, navigation }: Props) {
 
     return () => {
       cancelled = true;
-      void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     };
   }, []);
 

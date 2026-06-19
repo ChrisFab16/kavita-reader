@@ -40,7 +40,7 @@
 ## Phase 3 — Contextual navigation + zoom persistence
 
 - [ ] **T018** Add `readerGestures.ts`: `canTurnPage(direction, gestureState)`, `isAtEdge(...)`, unit tests
-- [ ] **T019** Wire L/R 30% tap zones through gesture router (only when `canTurnPage`)
+- [x] **T019** L/R **20%** page-turn zones on fit and zoomed paths (`ZoomablePageView` + `readerGestures`)
 - [ ] **T020** Suppress page turn while pan gesture active
 - [ ] **T021** Edge-then-next-page when zoomed at horizontal (and vertical per **Q8**) edge
 - [ ] **T022** Lift zoom `scale` to `ImageReaderScreen` state; persist across `currentPage`

@@ -7,7 +7,7 @@
 | Layout | `SCREEN_WIDTH` / `SCREEN_HEIGHT` at module load | Breaks on rotation |
 | Image | `fetch` → blob → `FileReader` base64 → `RNImage` | High JS memory; no native decode cache |
 | Gestures | `TouchableOpacity` tap zones when chrome hidden | No zoom, pan, pinch; center tap toggles chrome only |
-| Page turn | Immediate on R/L 30% tap | No edge-then-next when zoomed |
+| Page turn | Immediate on R/L **20%** tap (fit and zoomed) | Edge-then-next when panned to edge (deferred Q8) |
 | Zoom persistence | N/A | N/A |
 | EPUB | `EpubReaderScreen` ScrollView | Separate; unchanged by default |
 | Prefetch | `cacheChapter` on series detail only | Reader loads one page at a time |
@@ -94,7 +94,7 @@ On orientation change: recompute `fitScale`, adjust `scale` relative to fit if a
 
 - Pan gesture `activeOffset` / `failOffset` so small movement does not steal taps.
 - Track `isPanActive` shared value; tap handler no-ops while true.
-- Reuse existing 30% L/R zones only when `scale ≈ fitScale` and not in pan session.
+- Reuse **20%** L/R zones when chrome hidden; center double-tap zoom on pan path via viewport-fixed gestures.
 
 ### Edge-then-next-page
 

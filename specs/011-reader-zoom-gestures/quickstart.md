@@ -31,7 +31,7 @@ Manual acceptance for feature `011-reader-zoom-gestures`. Run on **physical Andr
 
 ## Phase 3 — Navigation
 
-1. At fit, hidden chrome: tap **right 30%** — next page; **left 30%** — previous page.
+1. At fit, hidden chrome: tap **right 20%** — next page; **left 20%** — previous page.
 2. Zoom in, pan to **center** — tap right zone — **no** page turn.
 3. Zoom in, pan to **right edge** — tap right zone — **next** page.
 4. Zoom to ~2×, turn 3 pages forward — **scale stays** ~2× each page.

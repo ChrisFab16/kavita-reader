@@ -3,7 +3,6 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
-  Dimensions,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -11,6 +10,7 @@ import {
   ScrollView,
   StatusBar,
   BackHandler,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, IconButton, ProgressBar } from 'react-native-paper';
@@ -19,15 +19,13 @@ import { useServerStore } from '../stores/serverStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useAppTheme, useIsDarkMode } from '../hooks/useAppTheme';
 import { exitReader, readerChromeOverlay } from '../utils/readerNavigation';
+import { getEdgeZoneWidths } from '../utils/readerGestures';
 import { buildProgressPayload } from '../utils/readingProgress';
 import type { ChapterInfoDto, ProgressDto } from '../types/kavita';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Reader'>;
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 // Simple HTML parser for basic tags
 const parseHtmlToReactNative = (html: string, fontSize: number, isDark: boolean, isGrayscale: boolean) => {
@@ -63,6 +61,8 @@ const parseHtmlToReactNative = (html: string, fontSize: number, isDark: boolean,
 
 export default function EpubReaderScreen({ route, navigation }: Props) {
   const { chapterId, seriesId, volumeId, libraryId } = route.params;
+  const { width: windowWidth } = useWindowDimensions();
+  const { leftWidth, rightWidth } = getEdgeZoneWidths(windowWidth);
   
   const [chapterInfo, setChapterInfo] = useState<ChapterInfoDto | null>(null);
   const [progressHint, setProgressHint] = useState<ProgressDto | null>(null);
@@ -323,7 +323,7 @@ export default function EpubReaderScreen({ route, navigation }: Props) {
           {/* Left tap zone - previous page (hidden when chrome visible — avoids stealing back tap) */}
           {!showControls ? (
             <TouchableOpacity
-              style={[styles.leftTapZone, styles.pageTurnZone]}
+              style={[styles.leftTapZone, styles.pageTurnZone, { width: leftWidth }]}
               activeOpacity={0.3}
               onPress={goToPreviousPage}
               disabled={currentPage === 0}
@@ -332,7 +332,7 @@ export default function EpubReaderScreen({ route, navigation }: Props) {
 
           {!showControls ? (
             <TouchableOpacity
-              style={[styles.rightTapZone, styles.pageTurnZone]}
+              style={[styles.rightTapZone, styles.pageTurnZone, { width: rightWidth }]}
               activeOpacity={0.3}
               onPress={goToNextPage}
               disabled={currentPage >= totalPages - 1}
@@ -463,14 +463,12 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    width: SCREEN_WIDTH * 0.3,
   },
   rightTapZone: {
     position: 'absolute',
     right: 0,
     top: 0,
     bottom: 0,
-    width: SCREEN_WIDTH * 0.3,
   },
   pageTurnZone: {
     zIndex: 5,

@@ -1,6 +1,6 @@
 // src/screens/LibraryDetailScreen.tsx
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Dimensions, Keyboard, RefreshControl, ScrollView, Platform, ViewToken, BackHandler } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, Keyboard, RefreshControl, ScrollView, Platform, ViewToken, BackHandler, useWindowDimensions } from 'react-native';
 import { Text, ActivityIndicator, Card, Searchbar, Chip, Button } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useServerStore } from '../stores/serverStore';
@@ -18,16 +18,10 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import ScreenHeaderActions from '../components/ScreenHeaderActions';
 import { useLibraryReloadOnFocus } from '../hooks/useLibraryReloadOnFocus';
+import { chunkIntoRows, getBrowseGridMetrics, isLandscape } from '../utils/responsiveLayout';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LibraryDetail'>;
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2;
-const COVER_HEIGHT = CARD_WIDTH * 1.5;
-const INFO_HEIGHT = 96;
-const ROW_MARGIN = 16;
-/** Total height per grid row (two cards + bottom gap). Used by getItemLayout. */
-const ROW_HEIGHT = COVER_HEIGHT + INFO_HEIGHT + ROW_MARGIN;
 const PAGE_SIZE = 100;
 
 type SeriesRow = SeriesDto[];
@@ -38,30 +32,42 @@ type SeriesCardProps = {
   onPress: (item: SeriesDto) => void;
   theme: Theme;
   placeholderColor: string;
+  cardWidth: number;
+  coverHeight: number;
+  infoHeight: number;
 };
 
-const SeriesCard = memo(function SeriesCard({ item, coverUrl, onPress, theme, placeholderColor }: SeriesCardProps) {
+const SeriesCard = memo(function SeriesCard({
+  item,
+  coverUrl,
+  onPress,
+  theme,
+  placeholderColor,
+  cardWidth,
+  coverHeight,
+  infoHeight,
+}: SeriesCardProps) {
   const progress = seriesProgressPercent(item);
   const subtitle = formatSeriesListSubtitle(item);
 
   return (
     <TouchableOpacity
-      style={styles.seriesCard}
+      style={{ width: cardWidth, height: coverHeight + infoHeight }}
       onPress={() => onPress(item)}
       activeOpacity={0.7}
     >
       <Card style={[styles.card, { backgroundColor: theme.surface }]}>
-        <View style={[styles.coverFrame, { backgroundColor: placeholderColor }]}>
+        <View style={[styles.coverFrame, { backgroundColor: placeholderColor, height: coverHeight }]}>
           <Image
             source={{ uri: coverUrl }}
-            style={styles.cover}
+            style={[styles.cover, { height: coverHeight }]}
             contentFit="cover"
             cachePolicy="memory-disk"
             transition={0}
             recyclingKey={String(item.id)}
           />
         </View>
-        <Card.Content style={styles.cardInfo}>
+        <Card.Content style={[styles.cardInfo, { height: infoHeight }]}>
           <Text variant="bodyMedium" numberOfLines={2} style={[styles.seriesTitle, { color: theme.text }]}>
             {item.name}
           </Text>
@@ -91,7 +97,11 @@ const SeriesCard = memo(function SeriesCard({ item, coverUrl, onPress, theme, pl
 
 export default function LibraryDetailScreen({ route, navigation }: Props) {
   const { libraryId, libraryName, collectionId } = route.params;
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const gridMetrics = useMemo(() => getBrowseGridMetrics(windowWidth), [windowWidth]);
+  const compactLayout = isLandscape(windowWidth, windowHeight);
   const isCollection = collectionId != null;
+  const [searchOpen, setSearchOpen] = useState(false);
   const [series, setSeries] = useState<SeriesDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -210,6 +220,7 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
     if (isReset) {
       setSeries([]);
       setSearchQuery('');
+      setSearchOpen(false);
       setLoading(true);
       setListGeneration((g) => g + 1);
       pageRef.current = 0;
@@ -286,6 +297,16 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
 
   useLibraryReloadOnFocus(handleFullReset);
 
+  const toggleSearch = useCallback(() => {
+    setSearchOpen((open) => {
+      if (open) {
+        setSearchQuery('');
+        Keyboard.dismiss();
+      }
+      return !open;
+    });
+  }, []);
+
   useLayoutEffect(() => {
     navigation.setOptions({
       title: libraryName,
@@ -293,10 +314,14 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
         <ScreenHeaderActions
           navigation={navigation}
           onRefresh={handleRefresh}
+          refreshing={refreshing}
+          showSettings={false}
+          searchActive={searchOpen}
+          onSearchPress={toggleSearch}
         />
       ),
     });
-  }, [navigation, libraryName, handleRefresh]);
+  }, [navigation, libraryName, handleRefresh, refreshing, searchOpen, toggleSearch]);
 
   const getCoverUrl = useCallback((seriesId: number) => {
     if (!client) return '';
@@ -311,14 +336,11 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
     return series.filter((s) => s.name?.toLowerCase().includes(query));
   }, [series, searchQuery]);
 
-  /** Pair series into rows — avoids FlatList numColumns + getItemLayout scroll bugs. */
-  const seriesRows = useMemo(() => {
-    const rows: SeriesRow[] = [];
-    for (let i = 0; i < displayedSeries.length; i += 2) {
-      rows.push(displayedSeries.slice(i, i + 2));
-    }
-    return rows;
-  }, [displayedSeries]);
+  /** Chunk series into rows for stable FlatList layout (column count follows orientation). */
+  const seriesRows = useMemo(
+    () => chunkIntoRows(displayedSeries, gridMetrics.columns),
+    [displayedSeries, gridMetrics.columns]
+  );
 
   seriesRowsRef.current = seriesRows;
 
@@ -385,7 +407,7 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
   }, [navigation]);
 
   const renderSeriesRow = useCallback(({ item: row }: { item: SeriesRow }) => (
-    <View style={styles.row}>
+    <View style={[styles.row, { height: gridMetrics.rowHeight - gridMetrics.gap, marginBottom: gridMetrics.gap, gap: gridMetrics.gap }]}>
       {row.map((item) => (
         <SeriesCard
           key={item.id}
@@ -394,11 +416,18 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
           onPress={handleSeriesPress}
           theme={theme}
           placeholderColor={theme.border}
+          cardWidth={gridMetrics.cardWidth}
+          coverHeight={gridMetrics.coverHeight}
+          infoHeight={gridMetrics.infoHeight}
         />
       ))}
-      {row.length === 1 ? <View style={styles.rowSpacer} /> : null}
+      {row.length < gridMetrics.columns
+        ? Array.from({ length: gridMetrics.columns - row.length }, (_, i) => (
+            <View key={`spacer-${i}`} style={{ width: gridMetrics.cardWidth }} />
+          ))
+        : null}
     </View>
-  ), [getCoverUrl, handleSeriesPress, theme]);
+  ), [getCoverUrl, handleSeriesPress, theme, gridMetrics]);
 
   const rowKeyExtractor = useCallback(
     (row: SeriesRow) => row.map((item) => item.id).join('-'),
@@ -407,11 +436,11 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
 
   const getRowLayout = useCallback(
     (_: ArrayLike<SeriesRow> | null | undefined, index: number) => ({
-      length: ROW_HEIGHT,
-      offset: ROW_HEIGHT * index,
+      length: gridMetrics.rowHeight,
+      offset: gridMetrics.rowHeight * index,
       index,
     }),
-    []
+    [gridMetrics.rowHeight]
   );
 
   const renderListFooter = useCallback(() => {
@@ -436,24 +465,27 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
         </Text>
       ) : null}
 
-      {isCollection ? (
+      {isCollection && !compactLayout ? (
         <Text variant="bodySmall" style={[styles.collectionHint, { color: theme.textSecondary }]}>
           Kavita collection tag — can include series from any library. Use Libraries above for per-library views.
         </Text>
       ) : null}
 
-      <Searchbar
-        placeholder="Search in library..."
-        onChangeText={setSearchQuery}
-        value={searchQuery}
-        style={[styles.searchBar, { backgroundColor: theme.surface }]}
-        onBlur={() => Keyboard.dismiss()}
-        iconColor={theme.textSecondary}
-        placeholderTextColor={theme.textTertiary}
-        inputStyle={{ color: theme.text }}
-      />
+      {searchOpen ? (
+        <Searchbar
+          placeholder="Search in library..."
+          onChangeText={setSearchQuery}
+          value={searchQuery}
+          style={[styles.searchBarCompact, { backgroundColor: theme.surface }]}
+          onBlur={() => Keyboard.dismiss()}
+          iconColor={theme.textSecondary}
+          placeholderTextColor={theme.textTertiary}
+          inputStyle={{ color: theme.text }}
+          autoFocus
+        />
+      ) : null}
 
-      <View style={styles.filterRow}>
+      <View style={[styles.filterRow, compactLayout && styles.filterRowCompact]}>
         <Chip
           selected={sortBy === 'name'}
           onPress={() => {
@@ -518,12 +550,12 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
         </ScrollView>
       ) : (
         <FlatList
-          key={listGeneration}
+          key={`${listGeneration}-${gridMetrics.columns}`}
           data={seriesRows}
           renderItem={renderSeriesRow}
           keyExtractor={rowKeyExtractor}
           style={styles.list}
-          contentContainerStyle={styles.gridContent}
+          contentContainerStyle={[styles.gridContent, compactLayout && styles.gridContentCompact]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           initialNumToRender={8}
@@ -576,15 +608,21 @@ const styles = StyleSheet.create({
   retryButton: {
     marginTop: 16,
   },
-  searchBar: {
-    margin: 16,
-    marginBottom: 8,
+  searchBarCompact: {
+    marginHorizontal: 8,
+    marginTop: 4,
+    marginBottom: 4,
+    elevation: 0,
   },
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingBottom: 12,
     gap: 8,
+  },
+  filterRowCompact: {
+    paddingTop: 4,
+    paddingBottom: 8,
   },
   chip: {
   },
@@ -594,18 +632,13 @@ const styles = StyleSheet.create({
   gridContent: {
     padding: 16,
   },
+  gridContentCompact: {
+    paddingTop: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    height: ROW_HEIGHT - ROW_MARGIN,
-    marginBottom: ROW_MARGIN,
-  },
-  rowSpacer: {
-    width: CARD_WIDTH,
-  },
-  seriesCard: {
-    width: CARD_WIDTH,
-    height: COVER_HEIGHT + INFO_HEIGHT,
   },
   card: {
     elevation: 2,
@@ -614,15 +647,12 @@ const styles = StyleSheet.create({
   },
   coverFrame: {
     width: '100%',
-    height: COVER_HEIGHT,
     overflow: 'hidden',
   },
   cover: {
     width: '100%',
-    height: COVER_HEIGHT,
   },
   cardInfo: {
-    height: INFO_HEIGHT,
     paddingTop: 8,
     paddingBottom: 8,
     paddingHorizontal: 8,

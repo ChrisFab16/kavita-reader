@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, useWindowDimensions } from 'react-native';
 import { Text, Card, ActivityIndicator, Searchbar, IconButton } from 'react-native-paper';
 import { useServerStore } from '../stores/serverStore';
 import { useThemeStore } from '../stores/themeStore';
@@ -8,6 +8,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import ScreenHeaderActions from '../components/ScreenHeaderActions';
 import { useLibraryReloadOnFocus } from '../hooks/useLibraryReloadOnFocus';
+import { getHomeCardWidth, isLandscape } from '../utils/responsiveLayout';
 import type { CollectionTagDto } from '../types/kavita';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
@@ -15,6 +16,10 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 const logger = createScreenLogger('HomeScreen');
 
 export default function HomeScreen({ navigation }: Props) {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const libraryCardWidth = getHomeCardWidth(windowWidth);
+  const compactLayout = isLandscape(windowWidth, windowHeight);
+  const [searchOpen, setSearchOpen] = useState(false);
   const lastRenderReason = useRef<string>('initial');
   
   logger.render(lastRenderReason.current);
@@ -72,6 +77,7 @@ export default function HomeScreen({ navigation }: Props) {
       setLibraries([]);
       setCollections([]);
       setSearchQuery('');
+      setSearchOpen(false);
       setLoading(true);
       lastRenderReason.current = 'reset-started';
     } else if (isRefresh) {
@@ -121,6 +127,15 @@ export default function HomeScreen({ navigation }: Props) {
     loadLibraries({ reset: true });
   }, [loadLibraries]);
 
+  const toggleSearch = useCallback(() => {
+    setSearchOpen((open) => {
+      if (open) {
+        setSearchQuery('');
+      }
+      return !open;
+    });
+  }, []);
+
   useLibraryReloadOnFocus(handleFullReset);
 
   useLayoutEffect(() => {
@@ -130,10 +145,12 @@ export default function HomeScreen({ navigation }: Props) {
           navigation={navigation}
           onRefresh={handleRefresh}
           refreshing={refreshing}
+          searchActive={searchOpen}
+          onSearchPress={toggleSearch}
         />
       ),
     });
-  }, [navigation, handleRefresh, refreshing]);
+  }, [navigation, handleRefresh, refreshing, searchOpen, toggleSearch]);
 
   const getLibraryIcon = (type: number) => {
     switch (type) {
@@ -179,22 +196,26 @@ export default function HomeScreen({ navigation }: Props) {
   
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Searchbar
-        placeholder="Search series..."
-        onChangeText={(text) => {
-          logger.user('Search query changed', text);
-          lastRenderReason.current = 'search-changed';
-          setSearchQuery(text);
-        }}
-        value={searchQuery}
-        style={[styles.searchBar, { backgroundColor: theme.surface }]}
-        iconColor={theme.textSecondary}
-        placeholderTextColor={theme.textTertiary}
-        inputStyle={{ color: theme.text }}
-      />
+      {searchOpen ? (
+        <Searchbar
+          placeholder="Search libraries and collections..."
+          onChangeText={(text) => {
+            logger.user('Search query changed', text);
+            lastRenderReason.current = 'search-changed';
+            setSearchQuery(text);
+          }}
+          value={searchQuery}
+          style={[styles.searchBarCompact, { backgroundColor: theme.surface }]}
+          iconColor={theme.textSecondary}
+          placeholderTextColor={theme.textTertiary}
+          inputStyle={{ color: theme.text }}
+          autoFocus
+        />
+      ) : null}
 
       <ScrollView
         style={styles.content}
+        contentContainerStyle={compactLayout ? styles.contentCompact : undefined}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -204,8 +225,8 @@ export default function HomeScreen({ navigation }: Props) {
           />
         }
       >
-        <View style={styles.section}>
-          <Text variant="titleLarge" style={[styles.sectionTitle, { color: theme.text }]}>
+        <View style={[styles.section, compactLayout && styles.sectionCompact]}>
+          <Text variant={compactLayout ? 'titleMedium' : 'titleLarge'} style={[styles.sectionTitle, compactLayout && styles.sectionTitleCompact, { color: theme.text }]}>
             Libraries
           </Text>
           
@@ -231,7 +252,7 @@ export default function HomeScreen({ navigation }: Props) {
                 return (
                   <TouchableOpacity
                     key={library.id}
-                    style={styles.libraryCard}
+                    style={[styles.libraryCard, { width: libraryCardWidth }]}
                     onPress={() => {
                       logger.user('Library clicked', library.name);
                       navigation.navigate('LibraryDetail', { 
@@ -263,8 +284,8 @@ export default function HomeScreen({ navigation }: Props) {
           )}
         </View>
 
-        <View style={styles.section}>
-          <Text variant="titleLarge" style={[styles.sectionTitle, { color: theme.text }]}>
+        <View style={[styles.section, compactLayout && styles.sectionCompact]}>
+          <Text variant={compactLayout ? 'titleMedium' : 'titleLarge'} style={[styles.sectionTitle, compactLayout && styles.sectionTitleCompact, { color: theme.text }]}>
             Collections
           </Text>
 
@@ -286,7 +307,7 @@ export default function HomeScreen({ navigation }: Props) {
               {filteredCollections.map((collection) => (
                 <TouchableOpacity
                   key={collection.id}
-                  style={styles.libraryCard}
+                  style={[styles.libraryCard, { width: libraryCardWidth }]}
                   onPress={() => {
                     logger.user('Collection clicked', collection.title);
                     navigation.navigate('LibraryDetail', {
@@ -333,22 +354,33 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
   },
-  searchBar: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
+  searchBarCompact: {
+    marginHorizontal: 8,
+    marginTop: 4,
+    marginBottom: 4,
+    elevation: 0,
   },
   content: {
     flex: 1,
+  },
+  contentCompact: {
+    paddingTop: 0,
   },
   section: {
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 24,
   },
+  sectionCompact: {
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
   sectionTitle: {
     marginBottom: 12,
     fontWeight: '600',
+  },
+  sectionTitleCompact: {
+    marginBottom: 6,
   },
   librariesGrid: {
     flexDirection: 'row',
@@ -356,7 +388,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   libraryCard: {
-    width: '47%',
   },
   card: {
     elevation: 2,
