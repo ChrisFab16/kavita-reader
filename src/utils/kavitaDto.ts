@@ -1,4 +1,4 @@
-import type { ChapterInfoDto, FileDimensionDto, ProgressDto } from '../types/kavita';
+import type { ChapterInfoDto, FileDimensionDto, ProgressDto, ContinuePointChapter } from '../types/kavita';
 import { MangaFormat } from '../types/kavita';
 
 /** Read a numeric Kavita field (camelCase or PascalCase JSON). */
@@ -66,6 +66,19 @@ export function normalizeProgressDto(raw: unknown): ProgressDto {
     seriesId: readKavitaInt(data, 'seriesId'),
     libraryId: readKavitaInt(data, 'libraryId'),
     bookScrollId: typeof bookScrollId === 'string' ? bookScrollId : null,
+  };
+}
+
+/** Normalize GET /api/Reader/continue-point chapter payload. */
+export function normalizeContinuePointChapter(raw: unknown): ContinuePointChapter {
+  const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const fileName = data.fileName ?? data.FileName;
+  return {
+    id: readKavitaInt(data, 'id'),
+    volumeId: readKavitaInt(data, 'volumeId'),
+    seriesId: readKavitaInt(data, 'seriesId'),
+    format: readKavitaInt(data, 'format') || undefined,
+    fileName: typeof fileName === 'string' ? fileName : null,
   };
 }
 

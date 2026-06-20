@@ -8,6 +8,7 @@ import {
   CollectionTagDto,
   ProgressDto,
   ChapterInfoDto,
+  ContinuePointChapter,
 } from '../types/kavita';
 import { filterSeriesForLibrary, hasCrossLibrarySeries } from '../utils/seriesLibraryFilter';
 import { parsePaginationHeader } from '../utils/kavitaPagination';
@@ -22,6 +23,7 @@ import type { LibrarySortMode } from '../utils/seriesPagination';
 import {
   extractApiErrorMessage,
   normalizeChapterInfo,
+  normalizeContinuePointChapter,
   normalizeProgressDto,
 } from '../utils/kavitaDto';
 import { validateProgressPayload } from '../utils/readingProgress';
@@ -679,6 +681,22 @@ export class KavitaClient {
         params: { chapterId },
       });
       return normalizeProgressDto(response.data);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /** Chapter to resume for a series (saved progress or first chapter). */
+  async getContinuePoint(seriesId: number): Promise<ContinuePointChapter> {
+    try {
+      const response = await this.client.get('/api/Reader/continue-point', {
+        params: { seriesId },
+      });
+      const chapter = normalizeContinuePointChapter(response.data);
+      if (chapter.id <= 0) {
+        throw new Error('No continue point returned for this series');
+      }
+      return chapter;
     } catch (error) {
       throw this.handleError(error);
     }

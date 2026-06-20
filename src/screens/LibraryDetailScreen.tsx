@@ -1,25 +1,26 @@
 // src/screens/LibraryDetailScreen.tsx
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity, Keyboard, RefreshControl, ScrollView, Platform, ViewToken, BackHandler, useWindowDimensions, Alert } from 'react-native';
 import { Text, ActivityIndicator, Card, Searchbar, Chip, Button } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useServerStore } from '../stores/serverStore';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { SeriesDto } from '../types/kavita';
-import { formatSeriesListSubtitle, seriesProgressPercent } from '../utils/seriesInfo';
 import {
   hasMoreSeriesPages,
   mergeSeriesPages,
   type LibrarySortMode,
 } from '../utils/seriesPagination';
 import { describeEmptyLibraryLoad } from '../utils/librarySeriesLoad';
-import type { Theme } from '../utils/theme';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import ScreenHeaderActions from '../components/ScreenHeaderActions';
 import { useLibraryReloadOnFocus } from '../hooks/useLibraryReloadOnFocus';
-import { chunkIntoRows, getBrowseGridMetrics, isLandscape } from '../utils/responsiveLayout';
+import { useBrowseGridLayout } from '../hooks/useBrowseGridLayout';
+import { chunkIntoRows, isLandscape } from '../utils/responsiveLayout';
 import { resolveSeriesGridMode } from '../api/kavitaPersonalLists';
+import BrowseSeriesRow from '../components/BrowseSeriesRow';
+import { openSeriesContinueReading } from '../utils/seriesContinueReading';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LibraryDetail'>;
 
@@ -27,83 +28,13 @@ const PAGE_SIZE = 100;
 
 type SeriesRow = SeriesDto[];
 
-type SeriesCardProps = {
-  item: SeriesDto;
-  coverUrl: string;
-  onPress: (item: SeriesDto) => void;
-  onLongPress?: (item: SeriesDto) => void;
-  theme: Theme;
-  placeholderColor: string;
-  cardWidth: number;
-  coverHeight: number;
-  infoHeight: number;
-};
-
-const SeriesCard = memo(function SeriesCard({
-  item,
-  coverUrl,
-  onPress,
-  onLongPress,
-  theme,
-  placeholderColor,
-  cardWidth,
-  coverHeight,
-  infoHeight,
-}: SeriesCardProps) {
-  const progress = seriesProgressPercent(item);
-  const subtitle = formatSeriesListSubtitle(item);
-
-  return (
-    <TouchableOpacity
-      style={{ width: cardWidth, height: coverHeight + infoHeight }}
-      onPress={() => onPress(item)}
-      onLongPress={onLongPress ? () => onLongPress(item) : undefined}
-      activeOpacity={0.7}
-    >
-      <Card style={[styles.card, { backgroundColor: theme.surface }]}>
-        <View style={[styles.coverFrame, { backgroundColor: placeholderColor, height: coverHeight }]}>
-          <Image
-            source={{ uri: coverUrl }}
-            style={[styles.cover, { height: coverHeight }]}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            transition={0}
-            recyclingKey={String(item.id)}
-          />
-        </View>
-        <Card.Content style={[styles.cardInfo, { height: infoHeight }]}>
-          <Text variant="bodyMedium" numberOfLines={2} style={[styles.seriesTitle, { color: theme.text }]}>
-            {item.name}
-          </Text>
-          <Text variant="bodySmall" numberOfLines={1} style={[styles.seriesInfo, { color: theme.textSecondary }]}>
-            {subtitle || ' '}
-          </Text>
-          <View style={styles.progressSlot}>
-            {progress > 0 ? (
-              <View style={[styles.progressBar, { backgroundColor: theme.border }]}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    {
-                      width: `${progress}%`,
-                      backgroundColor: theme.primary,
-                    },
-                  ]}
-                />
-              </View>
-            ) : null}
-          </View>
-        </Card.Content>
-      </Card>
-    </TouchableOpacity>
-  );
-});
-
 export default function LibraryDetailScreen({ route, navigation }: Props) {
   const { libraryId, libraryName, collectionId, gridMode: gridModeParam } = route.params;
   const gridMode = resolveSeriesGridMode({ gridMode: gridModeParam, collectionId, libraryId });
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const gridMetrics = useMemo(() => getBrowseGridMetrics(windowWidth), [windowWidth]);
+  const { gridMetrics, onGridLayout } = useBrowseGridLayout(windowWidth, windowHeight, {
+    sectionPadding: 16,
+  });
   const compactLayout = isLandscape(windowWidth, windowHeight);
   const isCollection = gridMode === 'collection';
   const isOnDeck = gridMode === 'onDeck';
@@ -450,37 +381,49 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
     [client]
   );
 
-  const handleSeriesPress = useCallback((item: SeriesDto) => {
-    navigation.navigate('SeriesDetail', {
-      seriesId: item.id,
-      seriesName: item.name,
-      seriesSummary: item.summary || undefined,
-    });
-  }, [navigation]);
+  const handleSeriesPress = useCallback(
+    (item: SeriesDto) => {
+      if (isOnDeck && client) {
+        void (async () => {
+          try {
+            await openSeriesContinueReading(client, navigation, item);
+          } catch (err: unknown) {
+            console.warn(
+              'Failed to open continue reading:',
+              err instanceof Error ? err.message : String(err)
+            );
+            navigation.navigate('SeriesDetail', {
+              seriesId: item.id,
+              seriesName: item.name,
+              seriesSummary: item.summary || undefined,
+            });
+          }
+        })();
+        return;
+      }
 
-  const renderSeriesRow = useCallback(({ item: row }: { item: SeriesRow }) => (
-    <View style={[styles.row, { height: gridMetrics.rowHeight - gridMetrics.gap, marginBottom: gridMetrics.gap, gap: gridMetrics.gap }]}>
-      {row.map((item) => (
-        <SeriesCard
-          key={item.id}
-          item={item}
-          coverUrl={getCoverUrl(item.id)}
-          onPress={handleSeriesPress}
-          onLongPress={isOnDeck ? handleRemoveFromOnDeck : undefined}
-          theme={theme}
-          placeholderColor={theme.border}
-          cardWidth={gridMetrics.cardWidth}
-          coverHeight={gridMetrics.coverHeight}
-          infoHeight={gridMetrics.infoHeight}
-        />
-      ))}
-      {row.length < gridMetrics.columns
-        ? Array.from({ length: gridMetrics.columns - row.length }, (_, i) => (
-            <View key={`spacer-${i}`} style={{ width: gridMetrics.cardWidth }} />
-          ))
-        : null}
-    </View>
-  ), [getCoverUrl, handleSeriesPress, handleRemoveFromOnDeck, isOnDeck, theme, gridMetrics]);
+      navigation.navigate('SeriesDetail', {
+        seriesId: item.id,
+        seriesName: item.name,
+        seriesSummary: item.summary || undefined,
+      });
+    },
+    [client, isOnDeck, navigation]
+  );
+
+  const renderSeriesRow = useCallback(
+    ({ item: row }: { item: SeriesRow }) => (
+      <BrowseSeriesRow
+        row={row}
+        metrics={gridMetrics}
+        getCoverUrl={getCoverUrl}
+        onPress={handleSeriesPress}
+        onLongPress={isOnDeck ? handleRemoveFromOnDeck : undefined}
+        theme={theme}
+      />
+    ),
+    [getCoverUrl, handleSeriesPress, handleRemoveFromOnDeck, isOnDeck, theme, gridMetrics]
+  );
 
   const rowKeyExtractor = useCallback(
     (row: SeriesRow) => row.map((item) => item.id).join('-'),
@@ -532,7 +475,7 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
 
       {isOnDeck && !compactLayout ? (
         <Text variant="bodySmall" style={[styles.collectionHint, { color: theme.textSecondary }]}>
-          Continue reading — long-press a series to remove from On Deck.
+          Tap to jump back in — long-press to remove from Currently Reading.
         </Text>
       ) : null}
 
@@ -625,6 +568,9 @@ export default function LibraryDetailScreen({ route, navigation }: Props) {
           keyExtractor={rowKeyExtractor}
           style={styles.list}
           contentContainerStyle={[styles.gridContent, compactLayout && styles.gridContentCompact]}
+          ListHeaderComponent={
+            <View style={styles.gridWidthProbe} onLayout={onGridLayout} />
+          }
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           initialNumToRender={8}
@@ -705,6 +651,10 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingHorizontal: 16,
     paddingBottom: 16,
+  },
+  gridWidthProbe: {
+    width: '100%',
+    height: 0,
   },
   row: {
     flexDirection: 'row',

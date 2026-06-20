@@ -89,6 +89,15 @@ export interface ProgressDto {
   lastModifiedUtc?: string;
 }
 
+/** Chapter returned by GET /api/Reader/continue-point — resume target for a series. */
+export interface ContinuePointChapter {
+  id: number;
+  volumeId: number;
+  seriesId: number;
+  format?: number;
+  fileName?: string | null;
+}
+
 /** Kavita `API.DTOs.Reader.ChapterInfoDto` — subset used by the reader. */
 export interface FileDimensionDto {
   width: number;
