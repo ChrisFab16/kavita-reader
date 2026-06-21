@@ -15,7 +15,7 @@
 - [x] T008 `kavitaClient` methods: on-deck list + remove-from-on-deck
 - [x] T009 `kavitaClient` methods: want-to-read v2 list + add/remove + membership check
 - [x] T010 Refactor or parametrize series grid for `onDeck` / `wantToRead` modes (reuse 007 pagination; pull-to-refresh per FR-009)
-- [x] T011 Home shelf selector; On Deck inline grid on Home (default when non-empty); Want to Read opens detail grid
+- [x] T011 Home shelf selector; On Deck shown only inside the **Currently Reading** shelf; Want to Read opens detail grid
 - [x] T012 Series detail: Want to Read toggle with server sync
 - [x] T013 Unit tests for new client wrappers (mock axios)
 - [ ] T014 Quickstart + validation-results Phase 1

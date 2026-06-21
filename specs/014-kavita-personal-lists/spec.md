@@ -50,7 +50,7 @@ As a returning reader, I want an **On Deck** section on Home showing series I am
 
 **Acceptance Scenarios**:
 
-1. **Given** logged-in user with progress on series A, **When** Home loads, **Then** On Deck shows series A with cover and progress hint.
+1. **Given** logged-in user with progress on series A, **When** Home loads and the user selects the **Currently Reading** shelf, **Then** On Deck shows series A with cover and progress hint. On Deck does **not** appear inside the Libraries or Collections shelves.
 2. **Given** On Deck item, **When** user long-presses or uses overflow “Remove from deck”, **Then** `remove-from-on-deck` is called and item hides until next read event on server.
 3. **Given** empty On Deck on server, **When** Home loads, **Then** section hidden or shows empty state without error.
 

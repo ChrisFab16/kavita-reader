@@ -77,8 +77,9 @@ Contracts in `specs/contracts/kavita-*.md` — probe live server during T001 spi
 
 ## UI approach
 
-1. **Home redesign (P1)**: Replace single “Libraries + Collections” scroll with **shelf selector** (chips or segmented control): `On Deck` | `Libraries` | `Collections` | `Want to Read` | …  
-   - Default shelf: **On Deck** when non-empty, else Libraries.
+1. **Home redesign (P1)**: Replace single “Libraries + Collections” scroll with **shelf selector** (chips or segmented control): `Currently Reading` | `Libraries` | `Collections` | `Want to Read` | …  
+   - Default shelf: **Libraries**.
+   - Currently Reading grid is only shown inside the `Currently Reading` shelf; it is **not** pinned at the top of Libraries or Collections.
    - Preserves header search (013) scoped to active shelf where applicable.
 2. **Reuse `LibraryDetailScreen` patterns** via shared `SeriesGridScreen` params: `{ mode: 'library' | 'collection' | 'wantToRead' | 'onDeck' | 'starred' }` OR separate thin wrapper screens — prefer **one grid screen + mode enum** to avoid duplication (plan task T010).
 3. **Series detail actions row**: icons for Want to Read, Rating stars, (future) bookmark count link.

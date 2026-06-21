@@ -298,8 +298,7 @@ export default function HomeScreen({ navigation }: Props) {
     : onDeckSeries;
   const onDeckRows = chunkIntoRows(filteredOnDeckSeries, gridMetrics.columns);
   const pinnedOnDeckRows = chunkIntoRows(onDeckSeries, gridMetrics.columns);
-  const showPinnedCurrentlyReading =
-    activeShelf !== 'onDeck' && onDeckSeries.length > 0 && !searchOpen;
+  const showPinnedCurrentlyReading = false;
 
   const renderCurrentlyReadingGrid = (rows: SeriesDto[][]) => (
     <View style={styles.onDeckGrid}>

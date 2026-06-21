@@ -2,5 +2,5 @@
 
 | Phase | Date | Device | Result | Notes |
 |-------|------|--------|--------|-------|
-| analyze | 2026-06-19 | — | pass | `analysis-report.md`: FR-001–008 ↔ code aligned |
-| manual | | | pending | T007 quickstart |
+| 1 (automated) | 2026-06-19 | CI | pass | T009/T010 `npm run test:layout` — browse grid contract + unit tests |
+| manual | 2026-06-21 | Android emulator | pass | T007 quickstart: landscape + portrait, header search, 5-column grid, readers OK |
