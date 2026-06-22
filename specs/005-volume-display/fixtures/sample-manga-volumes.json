@@ -1,0 +1,16 @@
+[
+  { "id": 1, "name": "1", "minNumber": 1, "chapters": [{ "id": 101, "range": "-100000", "format": 1, "pages": 192, "pagesRead": 0, "fileName": "Sample Manga v01.cbz" }] },
+  { "id": 2, "name": "2", "minNumber": 2, "chapters": [{ "id": 102, "range": "-100000", "format": 1, "pages": 180, "pagesRead": 0, "fileName": "Sample Manga v02.cbz" }] },
+  { "id": 3, "name": "3", "minNumber": 3, "chapters": [{ "id": 103, "range": "-100000", "format": 1, "pages": 178, "pagesRead": 0, "fileName": "Sample Manga v03.cbz" }] },
+  { "id": 4, "name": "4", "minNumber": 4, "chapters": [{ "id": 104, "range": "-100000", "format": 1, "pages": 190, "pagesRead": 0, "fileName": "Sample Manga v04.cbz" }] },
+  { "id": 5, "name": "5", "minNumber": 5, "chapters": [{ "id": 105, "range": "-100000", "format": 1, "pages": 185, "pagesRead": 0, "fileName": "Sample Manga v05.cbz" }] },
+  { "id": 6, "name": "6", "minNumber": 6, "chapters": [{ "id": 106, "range": "-100000", "format": 1, "pages": 188, "pagesRead": 0, "fileName": "Sample Manga v06.cbz" }] },
+  { "id": 7, "name": "7", "minNumber": 7, "chapters": [{ "id": 107, "range": "-100000", "format": 1, "pages": 191, "pagesRead": 0, "fileName": "Sample Manga v07.cbz" }] },
+  { "id": 8, "name": "8", "minNumber": 8, "chapters": [{ "id": 108, "range": "-100000", "format": 1, "pages": 187, "pagesRead": 0, "fileName": "Sample Manga v08.cbz" }] },
+  { "id": 9, "name": "9", "minNumber": 9, "chapters": [{ "id": 109, "range": "-100000", "format": 1, "pages": 189, "pagesRead": 0, "fileName": "Sample Manga v09.cbz" }] },
+  { "id": 10, "name": "10", "minNumber": 10, "chapters": [{ "id": 110, "range": "-100000", "format": 1, "pages": 186, "pagesRead": 0, "fileName": "Sample Manga v10.cbz" }] },
+  { "id": 11, "name": "11", "minNumber": 11, "chapters": [{ "id": 111, "range": "-100000", "format": 1, "pages": 184, "pagesRead": 0, "fileName": "Sample Manga v11.cbz" }] },
+  { "id": 12, "name": "12", "minNumber": 12, "chapters": [{ "id": 112, "range": "-100000", "format": 1, "pages": 183, "pagesRead": 0, "fileName": "Sample Manga v12.cbz" }] },
+  { "id": 13, "name": "13", "minNumber": 13, "chapters": [{ "id": 113, "range": "-100000", "format": 1, "pages": 190, "pagesRead": 0, "fileName": "Sample Manga v13.cbz" }] },
+  { "id": 14, "name": "14", "minNumber": 14, "chapters": [{ "id": 114, "range": "-100000", "format": 1, "pages": 195, "pagesRead": 0, "fileName": "Sample Manga v14.cbz" }] }
+]

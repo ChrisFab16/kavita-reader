@@ -110,7 +110,7 @@ These files are the **portable, maintainer-facing** API documentation. They map 
 Content formerly only in feature specs was **merged or relocated**:
 
 - `specs/002-auth-login-fix/contracts/auth-routes.md` → `specs/contracts/kavita-auth.md`
-- `specs/005-volume-display/fixtures/dungeon-meshi-volumes.json` → `src/test-fixtures/dungeon-meshi-volumes.json`
+- `specs/005-volume-display/fixtures/sample-manga-volumes.json` → `src/test-fixtures/sample-manga-volumes.json`
 
 ---
 
@@ -161,7 +161,7 @@ Deleting artifacts from the PR branch **does not** delete them from `speckit-wor
 
 - **No behavioral change** from the cleanup commit — only documentation and agent tooling removed.
 - **Contracts** document Kavita integration pitfalls we hit in production (FilterV2 field 19, `Pagination` header, `libraryId` on progress POST, etc.).
-- **Tests:** `npm test` (34 unit tests); fixture at `src/test-fixtures/dungeon-meshi-volumes.json`.
+- **Tests:** `npm test` (34 unit tests); fixture at `src/test-fixtures/sample-manga-volumes.json`.
 - Questions about removed feature specs: see fork branch `speckit-work` or ask the contributor.
 
 ---

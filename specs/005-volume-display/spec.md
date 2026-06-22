@@ -4,7 +4,7 @@
 **Created**: 2026-06-16  
 **Status**: Implemented
 
-**Input**: "Delicious in Dungeon" has 14 volumes but app listing omits volume numbering.
+**Input**: A multi-volume manga series has 14 volumes but app listing omits volume numbering.
 
 ## Root cause
 
@@ -28,7 +28,7 @@ As a reader browsing a multi-volume manga series, I see **Volume 1 … Volume N*
 npm test
 ```
 
-Uses Node test runner + `specs/005-volume-display/fixtures/dungeon-meshi-volumes.json`.
+Uses Node test runner + `specs/005-volume-display/fixtures/sample-manga-volumes.json`.
 
 ## Key Files
 
