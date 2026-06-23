@@ -1,4 +1,4 @@
 {
-  "feature_directory": "specs/014-kavita-personal-lists",
-  "notes": "Phase 1: on-deck + want-to-read shelves."
+  "feature_directory": "specs/016-tablet-layout",
+  "notes": "Foundation planning: responsive Material 3 breakpoints + two-pane Home/Series Detail on expanded-width tablets. No code change yet."
 }
