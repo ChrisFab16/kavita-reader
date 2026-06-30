@@ -5,7 +5,7 @@ import {
   validateProgressPayload,
   ProgressPayloadError,
 } from './readingProgress';
-import { normalizeChapterInfo, normalizeProgressDto } from './kavitaDto';
+import { normalizeChapterInfo, normalizeContinuePointChapter, normalizeProgressDto } from './kavitaDto';
 import type { ChapterInfoDto } from '../types/kavita';
 import { MangaFormat } from '../types/kavita';
 
@@ -110,5 +110,22 @@ describe('normalizeProgressDto', () => {
     });
     assert.equal(normalized.pageNum, 7);
     assert.equal(normalized.chapterId, 99);
+  });
+});
+
+describe('normalizeContinuePointChapter', () => {
+  it('reads chapter ids for continue-point', () => {
+    const normalized = normalizeContinuePointChapter({
+      Id: 789,
+      VolumeId: 456,
+      SeriesId: 123,
+      FileName: 'vol01.cbz',
+      Format: 1,
+    });
+    assert.equal(normalized.id, 789);
+    assert.equal(normalized.volumeId, 456);
+    assert.equal(normalized.seriesId, 123);
+    assert.equal(normalized.fileName, 'vol01.cbz');
+    assert.equal(normalized.format, 1);
   });
 });

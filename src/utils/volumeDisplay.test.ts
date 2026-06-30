@@ -17,7 +17,7 @@ import type { VolumeListItem } from './volumeDisplay';
 
 const FIXTURE_PATH = path.join(
   process.cwd(),
-  'specs/005-volume-display/fixtures/sample-manga-volumes.json'
+  'specs/005-volume-display/fixtures/dungeon-meshi-volumes.json'
 );
 
 function makeVolume(id: number, name: string, chapterCount = 1, range = '1'): VolumeListItem {
@@ -36,14 +36,14 @@ function makeArchiveVolume(id: number, name: string): VolumeListItem {
   return makeVolume(id, name, 1, '-100000');
 }
 
-/** Sample multi-volume manga: 14 volumes named "1".."14", one archive chapter each. */
-function sampleMangaFixture(): VolumeListItem[] {
+/** Delicious in Dungeon–style: 14 volumes named "1".."14", one archive chapter each. */
+function deliciousInDungeonFixture(): VolumeListItem[] {
   return Array.from({ length: 14 }, (_, i) => makeArchiveVolume(i + 1, String(i + 1)));
 }
 
 describe('volumeDisplay', () => {
-  describe('Sample multi-volume manga (14 numeric volumes)', () => {
-    const volumes = sampleMangaFixture();
+  describe('Delicious in Dungeon (14 numeric volumes)', () => {
+    const volumes = deliciousInDungeonFixture();
 
     it('shows all 14 volume headers', () => {
       assert.equal(countSeriesVolumes(volumes), 14);
@@ -126,7 +126,7 @@ describe('volumeDisplay', () => {
     });
   });
 
-  describe('spec fixture: sample-manga-volumes.json', () => {
+  describe('spec fixture: dungeon-meshi-volumes.json', () => {
     it('loads Kavita-shaped fixture and passes volume display contract', () => {
       const raw = fs.readFileSync(FIXTURE_PATH, 'utf8');
       const volumes = JSON.parse(raw) as VolumeListItem[];

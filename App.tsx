@@ -2,21 +2,31 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { PaperProvider, MD3DarkTheme, MD3LightTheme } from 'react-native-paper';
 import AppNavigator from './src/navigation/AppNavigator';
 import { useThemeStore } from './src/stores/themeStore';
 import { lightTheme, darkTheme } from './src/utils/theme';
+import { resolveInitialRoute, waitForServerStoreHydration, type InitialRoute } from './src/utils/sessionBootstrap';
 
 export default function App() {
-  const [isReady, setIsReady] = useState(false);
+  const [boot, setBoot] = useState<{ ready: false } | { ready: true; initialRoute: InitialRoute }>({ ready: false });
   const isDarkMode = useThemeStore((state) => state.isDarkMode);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsReady(true);
-    }, 100);
+    let cancelled = false;
 
-    return () => clearTimeout(timer);
+    (async () => {
+      await waitForServerStoreHydration();
+      const initialRoute = await resolveInitialRoute();
+      if (!cancelled) {
+        setBoot({ ready: true, initialRoute });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Memoize the paper theme to prevent unnecessary recalculations
@@ -74,7 +84,7 @@ export default function App() {
     };
   }, [isDarkMode]);
 
-  if (!isReady) {
+  if (!boot.ready) {
     const loadingTheme = isDarkMode ? darkTheme : lightTheme;
     return (
       <View style={{ 
@@ -89,9 +99,11 @@ export default function App() {
   }
 
   return (
-    <PaperProvider theme={paperTheme}>
-      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
-      <AppNavigator theme={navigationTheme} />
-    </PaperProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <PaperProvider theme={paperTheme}>
+        <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+        <AppNavigator theme={navigationTheme} initialRouteName={boot.initialRoute} />
+      </PaperProvider>
+    </GestureHandlerRootView>
   );
 }

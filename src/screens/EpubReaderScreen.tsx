@@ -1,15 +1,16 @@
 // src/screens/EpubReaderScreen.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
-  Dimensions,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
   Platform,
   ScrollView,
   StatusBar,
+  BackHandler,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, IconButton, ProgressBar } from 'react-native-paper';
@@ -17,13 +18,14 @@ import { Audio } from 'expo-av';
 import { useServerStore } from '../stores/serverStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useAppTheme, useIsDarkMode } from '../hooks/useAppTheme';
+import { exitReader, readerChromeOverlay } from '../utils/readerNavigation';
+import { getEdgeZoneWidths } from '../utils/readerGestures';
+import { buildProgressPayload } from '../utils/readingProgress';
+import type { ChapterInfoDto, ProgressDto } from '../types/kavita';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Reader'>;
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 // Simple HTML parser for basic tags
 const parseHtmlToReactNative = (html: string, fontSize: number, isDark: boolean, isGrayscale: boolean) => {
@@ -58,14 +60,18 @@ const parseHtmlToReactNative = (html: string, fontSize: number, isDark: boolean,
 };
 
 export default function EpubReaderScreen({ route, navigation }: Props) {
-  const { chapterId, seriesId } = route.params;
+  const { chapterId, seriesId, volumeId, libraryId } = route.params;
+  const { width: windowWidth } = useWindowDimensions();
+  const { leftWidth, rightWidth } = getEdgeZoneWidths(windowWidth);
   
-  const [chapterInfo, setChapterInfo] = useState<any>(null);
+  const [chapterInfo, setChapterInfo] = useState<ChapterInfoDto | null>(null);
+  const [progressHint, setProgressHint] = useState<ProgressDto | null>(null);
   const [bookInfo, setBookInfo] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showControls, setShowControls] = useState(true);
+  const [progressSaveError, setProgressSaveError] = useState<string | null>(null);
   const [pageContent, setPageContent] = useState<string[]>([]);
   const [fontSize, setFontSize] = useState(18);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -81,19 +87,11 @@ export default function EpubReaderScreen({ route, navigation }: Props) {
     loadEpub();
     
     return () => {
-      saveProgress();
       if (sound) {
         sound.unloadAsync();
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (currentPage >= 0 && chapterInfo) {
-      const timeout = setTimeout(() => saveProgress(), 1000);
-      return () => clearTimeout(timeout);
-    }
-  }, [currentPage]);
 
   useEffect(() => {
     if (bookInfo && currentPage >= 0) {
@@ -130,19 +128,22 @@ export default function EpubReaderScreen({ route, navigation }: Props) {
     try {
       console.log('📘 Loading EPUB chapter:', chapterId);
       
-      const [info, epubInfo] = await Promise.all([
+      const [info, epubInfo, progress] = await Promise.all([
         client.getChapterInfo(chapterId),
-        client.getBookInfo(chapterId)
+        client.getBookInfo(chapterId),
+        client.getProgress(chapterId),
       ]);
       
       console.log('📖 Chapter info:', info);
       console.log('📚 Book info:', epubInfo);
+      console.log('📍 Saved progress page:', progress.pageNum);
       
       setChapterInfo(info);
+      setProgressHint(progress);
       setBookInfo(epubInfo);
       setTotalPages(epubInfo.pages || 0);
       
-      const startPage = (info.currentPage && info.currentPage > 0) ? info.currentPage : 0;
+      const startPage = progress.pageNum > 0 ? progress.pageNum : 0;
       console.log(`📄 Starting at page ${startPage + 1} of ${epubInfo.pages} (0-indexed: ${startPage})`);
       setCurrentPage(startPage);
       
@@ -175,21 +176,53 @@ export default function EpubReaderScreen({ route, navigation }: Props) {
     }
   };
 
-  const saveProgress = async () => {
-    if (!client || !chapterInfo) return;
-    
+  const saveProgress = useCallback(async () => {
+    if (!client || !chapterInfo || currentPage <= 0) return;
+
     try {
       await client.markProgress(
-        seriesId,
-        chapterInfo.volumeId,
-        chapterId,
-        currentPage
+        buildProgressPayload(chapterInfo, chapterId, currentPage, {
+          seriesIdFallback: seriesId,
+          volumeIdFallback: volumeId,
+          libraryIdFallback: libraryId,
+          progressHint,
+        })
       );
-      console.log(`💾 Progress saved: page ${currentPage + 1} (0-indexed: ${currentPage})`);
+      setProgressSaveError(null);
     } catch (error) {
-      console.error('❌ Failed to save progress:', error);
+      const message = error instanceof Error ? error.message : 'Failed to save reading progress';
+      console.warn('Failed to save progress:', message);
+      setProgressSaveError(message);
     }
-  };
+  }, [client, chapterInfo, progressHint, seriesId, volumeId, libraryId, chapterId, currentPage]);
+
+  const saveProgressRef = useRef(saveProgress);
+  saveProgressRef.current = saveProgress;
+
+  useEffect(() => {
+    return () => {
+      void saveProgressRef.current();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (currentPage >= 0 && chapterInfo) {
+      const timeout = setTimeout(() => saveProgress(), 1000);
+      return () => clearTimeout(timeout);
+    }
+  }, [currentPage, chapterInfo, saveProgress]);
+
+  const handleExit = useCallback(() => {
+    exitReader(navigation, saveProgress);
+  }, [navigation, saveProgress]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleExit();
+      return true;
+    });
+    return () => sub.remove();
+  }, [handleExit]);
 
   const goToNextPage = () => {
     if (currentPage < totalPages - 1) {
@@ -204,10 +237,7 @@ export default function EpubReaderScreen({ route, navigation }: Props) {
           { text: 'Stay Here', style: 'cancel' },
           { 
             text: 'Go Back', 
-            onPress: () => {
-              saveProgress();
-              navigation.goBack();
-            }
+            onPress: handleExit,
           },
         ]
       );
@@ -290,34 +320,35 @@ export default function EpubReaderScreen({ route, navigation }: Props) {
             </ScrollView>
           </TouchableOpacity>
 
-          {/* Left tap zone - previous page */}
-          <TouchableOpacity
-            style={styles.leftTapZone}
-            activeOpacity={0.3}
-            onPress={goToPreviousPage}
-            disabled={currentPage === 0}
-          />
+          {/* Left tap zone - previous page (hidden when chrome visible — avoids stealing back tap) */}
+          {!showControls ? (
+            <TouchableOpacity
+              style={[styles.leftTapZone, styles.pageTurnZone, { width: leftWidth }]}
+              activeOpacity={0.3}
+              onPress={goToPreviousPage}
+              disabled={currentPage === 0}
+            />
+          ) : null}
 
-          {/* Right tap zone - next page */}
-          <TouchableOpacity
-            style={styles.rightTapZone}
-            activeOpacity={0.3}
-            onPress={goToNextPage}
-            disabled={currentPage >= totalPages - 1}
-          />
+          {!showControls ? (
+            <TouchableOpacity
+              style={[styles.rightTapZone, styles.pageTurnZone, { width: rightWidth }]}
+              activeOpacity={0.3}
+              onPress={goToNextPage}
+              disabled={currentPage >= totalPages - 1}
+            />
+          ) : null}
         </View>
 
         {showControls && (
           <>
-            <View style={styles.topBar}>
+            <SafeAreaView style={[styles.topBar, readerChromeOverlay]} edges={['top']}>
               <IconButton
                 icon="arrow-left"
                 iconColor="#fff"
                 size={24}
-                onPress={() => {
-                  saveProgress();
-                  navigation.goBack();
-                }}
+                onPress={handleExit}
+                accessibilityLabel="Go back"
               />
               <Text style={styles.topBarTitle} numberOfLines={1}>
                 {chapterInfo?.title || chapterInfo?.seriesName || 'Reading'}
@@ -336,9 +367,9 @@ export default function EpubReaderScreen({ route, navigation }: Props) {
                   onPress={() => changeFontSize(2)}
                 />
               </View>
-            </View>
+            </SafeAreaView>
 
-            <View style={styles.bottomBar}>
+            <SafeAreaView style={[styles.bottomBar, readerChromeOverlay]} edges={['bottom']}>
               <ProgressBar
                 progress={totalPages > 0 ? (currentPage + 1) / totalPages : 0}
                 color={theme.primary}
@@ -368,9 +399,17 @@ export default function EpubReaderScreen({ route, navigation }: Props) {
                   disabled={currentPage >= totalPages - 1}
                 />
               </View>
-            </View>
+            </SafeAreaView>
           </>
         )}
+
+        {progressSaveError ? (
+          <SafeAreaView style={[styles.progressErrorBanner, readerChromeOverlay]} edges={['top']}>
+            <Text variant="bodySmall" style={styles.progressErrorText}>
+              {progressSaveError}
+            </Text>
+          </SafeAreaView>
+        ) : null}
       </SafeAreaView>
     </View>
   );
@@ -422,16 +461,30 @@ const styles = StyleSheet.create({
   leftTapZone: {
     position: 'absolute',
     left: 0,
-    top: 100,
-    bottom: 100,
-    width: SCREEN_WIDTH * 0.3,
+    top: 0,
+    bottom: 0,
   },
   rightTapZone: {
     position: 'absolute',
     right: 0,
-    top: 100,
-    bottom: 100,
-    width: SCREEN_WIDTH * 0.3,
+    top: 0,
+    bottom: 0,
+  },
+  pageTurnZone: {
+    zIndex: 5,
+  },
+  progressErrorBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(180, 40, 40, 0.92)',
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  progressErrorText: {
+    color: '#fff',
+    textAlign: 'center',
   },
   topBar: {
     position: 'absolute',
@@ -460,7 +513,6 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     paddingTop: 10,
-    paddingBottom: 10,
     paddingHorizontal: 16,
   },
   progressBar: {

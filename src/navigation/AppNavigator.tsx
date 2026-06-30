@@ -10,29 +10,45 @@ import LibraryDetailScreen from '../screens/LibraryDetailScreen';
 import SeriesDetailScreen from '../screens/SeriesDetailScreen';
 import ReaderScreen from '../screens/ReaderScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import DownloadsScreen from '../screens/DownloadsScreen';
+import type { SeriesGridMode } from '../types/kavita';
 
 export type RootStackParamList = {
   Connect: undefined;
   Login: { serverUrl: string };
   Home: undefined;
-  LibraryDetail: { libraryId: number; libraryName: string };
-  SeriesDetail: { seriesId: number };
-  Reader: { chapterId: number; seriesId: number };
+  LibraryDetail: {
+    libraryId?: number;
+    libraryName: string;
+    collectionId?: number;
+    gridMode?: SeriesGridMode;
+  };
+  SeriesDetail: { seriesId: number; seriesName?: string; seriesSummary?: string };
+  Reader: {
+    chapterId: number;
+    seriesId: number;
+    volumeId?: number;
+    libraryId?: number;
+    chapterFormat?: number;
+    fileName?: string;
+  };
   Settings: undefined;
+  Downloads: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 interface AppNavigatorProps {
   theme: NavTheme;
+  initialRouteName?: keyof RootStackParamList;
 }
 
-export default function AppNavigator({ theme }: AppNavigatorProps) {
+export default function AppNavigator({ theme, initialRouteName = 'Connect' }: AppNavigatorProps) {
   return (
     <NavigationContainer theme={theme}>
       <Stack.Navigator 
         id="main-stack"
-        initialRouteName="Connect"
+        initialRouteName={initialRouteName}
         screenOptions={{
           headerStyle: { 
             backgroundColor: theme.colors.primary,
@@ -56,32 +72,16 @@ export default function AppNavigator({ theme }: AppNavigatorProps) {
         <Stack.Screen 
           name="Home" 
           component={HomeScreen}
-          options={({ navigation }) => ({
+          options={{
             title: 'My Libraries',
             headerLeft: () => null,
-            headerRight: () => (
-              <IconButton
-                icon="cog"
-                iconColor="#fff"
-                size={24}
-                onPress={() => navigation.navigate('Settings')}
-              />
-            ),
-          })}
+          }}
         />
         <Stack.Screen 
           name="LibraryDetail" 
           component={LibraryDetailScreen}
-          options={({ route, navigation }) => ({ 
+          options={({ route }) => ({ 
             title: route.params.libraryName,
-            headerRight: () => (
-              <IconButton
-                icon="cog"
-                iconColor="#fff"
-                size={24}
-                onPress={() => navigation.navigate('Settings')}
-              />
-            ),
           })}
         />
         <Stack.Screen 
@@ -109,6 +109,13 @@ export default function AppNavigator({ theme }: AppNavigatorProps) {
           component={SettingsScreen}
           options={{ 
             title: 'Settings',
+          }}
+        />
+        <Stack.Screen
+          name="Downloads"
+          component={DownloadsScreen}
+          options={{
+            title: 'Downloads',
           }}
         />
       </Stack.Navigator>
